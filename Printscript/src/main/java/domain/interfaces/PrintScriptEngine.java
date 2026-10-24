@@ -1,5 +1,9 @@
 package domain.interfaces;
 
+import domain.result.FormatResult;
+import domain.result.InterpretResult;
+import domain.result.LintResult;
+
 import java.util.List;
 
 // aca voy a guardar la logica del lenguaje nom onda me chupa un huevo
