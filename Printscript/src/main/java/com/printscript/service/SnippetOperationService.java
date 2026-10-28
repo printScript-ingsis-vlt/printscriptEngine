@@ -1,11 +1,12 @@
 package com.printscript.service;
 
 
-import com.printscript.domain.errors.FileRepository;
+import com.printscript.repository.FileRepository;
 import com.printscript.domain.interfaces.PrintScriptEngine;
 import com.printscript.domain.result.FormatResult;
 import com.printscript.domain.result.InterpretResult;
 import com.printscript.domain.result.LintResult;
+import com.printscript.domain.result.ValidationResult;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
@@ -51,5 +52,10 @@ public class SnippetOperationService {
     /** Sin key de reglas se usan los defaults del engine (config vacia). */
     private String loadRules(String rulesKey) {
         return (rulesKey == null || rulesKey.isBlank()) ? null : files.get(rulesKey);
+    }
+
+    public ValidationResult validate(String snippetKey, String version) {
+        String code = files.get(snippetKey);
+        return engine.validate(code, version);
     }
 }

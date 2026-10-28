@@ -5,6 +5,7 @@ import com.printscript.controller.request.RulesOperationRequest;
 import com.printscript.domain.result.FormatResult;
 import com.printscript.domain.result.InterpretResult;
 import com.printscript.domain.result.LintResult;
+import com.printscript.domain.result.ValidationResult;
 import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -40,5 +41,12 @@ public class SnippetOperationController {
     @PostMapping("/format")
     public FormatResult format(@Valid @RequestBody RulesOperationRequest request) {
         return service.format(request.snippetKey(), request.rulesKey(), request.version());
+    }
+
+    @PostMapping("/validate")
+    public ValidationResult validate(
+            @Valid @RequestBody RulesOperationRequest request
+    ) {
+        return service.validate(request.snippetKey(), request.version());
     }
 }

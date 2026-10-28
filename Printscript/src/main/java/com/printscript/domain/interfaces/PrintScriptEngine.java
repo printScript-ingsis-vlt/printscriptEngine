@@ -3,6 +3,7 @@ package com.printscript.domain.interfaces;
 import com.printscript.domain.result.FormatResult;
 import com.printscript.domain.result.InterpretResult;
 import com.printscript.domain.result.LintResult;
+import com.printscript.domain.result.ValidationResult;
 
 import java.util.List;
 
@@ -18,4 +19,6 @@ public interface PrintScriptEngine {
 
     // formateo con reglas configguradas en jason
     FormatResult format(String code, String version, String formatConfigJson);
+
+    ValidationResult validate(String code, String version);
 }

@@ -1,4 +1,7 @@
-package com.printscript.domain.errors;
+package com.printscript.repository;
+
+import com.printscript.domain.errors.StorageFileNotFoundException;
+import com.printscript.domain.errors.StorageUnavailableException;
 
 /**
  * Acceso al almacenamiento de archivos (S3). Devuelve datos crudos, sin logica del lenguaje.

@@ -6,10 +6,7 @@ import com.printscript.domain.errors.ExecutionTimeoutException;
 import com.printscript.domain.errors.InvalidLintConfigException;
 import com.printscript.domain.errors.UnsupportedVersionException;
 import com.printscript.domain.interfaces.PrintScriptEngine;
-import com.printscript.domain.result.FormatResult;
-import com.printscript.domain.result.InterpretResult;
-import com.printscript.domain.result.LintIssue;
-import com.printscript.domain.result.LintResult;
+import com.printscript.domain.result.*;
 import formatter.FormattingRules;
 import interpreter.Output;
 import interpreter.ScriptInputProvider;
@@ -181,6 +178,24 @@ public class DefaultPrintScriptEngine implements PrintScriptEngine {
             errors.add(messageOf(e));
             return new FormatResult(null, errors);
         }
+    }
+
+    @Override
+    public ValidationResult validate(String code, String version) {
+        PrintScriptVersion psVersion = parseVersion(version);
+        List<String> errors = new ArrayList<>();
+
+        try {
+            parse(code, psVersion, errors, true);
+        } catch (Exception e) {
+            errors.add(messageOf(e));
+        }
+
+        List<ValidationError> validationErrors = errors.stream()
+                .map(message -> new ValidationError(message, null, null))
+                .toList();
+
+        return new ValidationResult(validationErrors);
     }
 
     // ----------------------------------------------------------------- helpers
