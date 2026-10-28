@@ -6,6 +6,7 @@ import com.printscript.domain.errors.ExecutionTimeoutException;
 import com.printscript.domain.interfaces.PrintScriptEngine;
 import com.printscript.domain.result.FormatResult;
 import com.printscript.domain.result.InterpretResult;
+import com.printscript.domain.result.LintIssue;
 import com.printscript.domain.result.LintResult;
 import formatter.FormattingRules;
 import interpreter.Output;
@@ -117,32 +118,44 @@ public class DefaultPrintScriptEngine implements PrintScriptEngine {
     @Override
     public LintResult lint(String code, String version, String lintConfigJson) {
         PrintScriptVersion psVersion = parseVersion(version);
-        List<String> issues = new ArrayList<>();
+
+        List<LintIssue> issues = new ArrayList<>();
+        List<String> errors = new ArrayList<>();
+
         try {
-            Parsed parsed = parse(code, psVersion, issues, true);
+            Parsed parsed = parse(code, psVersion, errors, true);
+
             if (parsed == null) {
-                return new LintResult(issues);
+                return new LintResult(issues, errors);
             }
 
             JSONObject json = toJson(lintConfigJson);
             LintConfig lintConfig = parseLintConfig(json);
-            // PrintScriptLinter.buildRules() agrega identifier-format sin importar la config,
-            // asi que filtramos esas notificaciones si el config no la pidio explicitamente.
+
             boolean identifierFormatRequested = json.has("identifier_format");
 
-            var notifications = new linter.PrintScriptLinter(lintConfig).lint(parsed.program());
+            var notifications =
+                    new linter.PrintScriptLinter(lintConfig).lint(parsed.program());
+
             for (var n : notifications) {
-                if (!identifierFormatRequested && "identifier-format".equals(n.getRule())) {
+                if (!identifierFormatRequested
+                        && "identifier-format".equals(n.getRule())) {
                     continue;
                 }
-                issues.add(n.getSeverity() + ": "
-                        + n.getPosition().getLine() + ":" + n.getPosition().getColumn()
-                        + " - " + n.getMessage());
+
+                issues.add(new LintIssue(
+                        n.getRule(),
+                        String.valueOf(n.getSeverity()),
+                        n.getMessage(),
+                        n.getPosition().getLine(),
+                        n.getPosition().getColumn()
+                ));
             }
         } catch (Exception e) {
-            issues.add(messageOf(e));
+            errors.add(messageOf(e));
         }
-        return new LintResult(issues);
+
+        return new LintResult(issues, errors);
     }
 
     // ------------------------------------------------------------------ format
