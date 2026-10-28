@@ -1,4 +1,4 @@
-package domain.errors;
+package com.printscript.domain.errors;
 
 
 // no existe el archivo con esa key devuelvo 404

@@ -1,8 +1,8 @@
-package domain.interfaces;
+package com.printscript.domain.interfaces;
 
-import domain.result.FormatResult;
-import domain.result.InterpretResult;
-import domain.result.LintResult;
+import com.printscript.domain.result.FormatResult;
+import com.printscript.domain.result.InterpretResult;
+import com.printscript.domain.result.LintResult;
 
 import java.util.List;
 

@@ -1,8 +1,8 @@
-package controller;
+package com.printscript.controller;
 
-import domain.errors.ExecutionTimeoutException;
-import domain.errors.StorageFileNotFoundException;
-import domain.errors.StorageUnavailableException;
+import com.printscript.domain.errors.ExecutionTimeoutException;
+import com.printscript.domain.errors.StorageFileNotFoundException;
+import com.printscript.domain.errors.StorageUnavailableException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;

@@ -1,4 +1,4 @@
-package domain.result;
+package com.printscript.domain.result;
 
 import java.util.List;
 

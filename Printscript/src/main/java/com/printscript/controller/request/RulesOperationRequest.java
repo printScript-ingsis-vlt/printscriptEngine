@@ -1,4 +1,4 @@
-package controller.request;
+package com.printscript.controller.request;
 
 import jakarta.validation.constraints.NotBlank;
 

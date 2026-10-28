@@ -1,4 +1,4 @@
-package domain.errors;
+package com.printscript.domain.errors;
 
 /**
  * Acceso al almacenamiento de archivos (S3). Devuelve datos crudos, sin logica del lenguaje.

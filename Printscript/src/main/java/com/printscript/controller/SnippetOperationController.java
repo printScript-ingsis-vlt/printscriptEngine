@@ -1,16 +1,16 @@
-package controller;
+package com.printscript.controller;
 
-import controller.request.InterpretRequest;
-import controller.request.RulesOperationRequest;
-import domain.result.FormatResult;
-import domain.result.InterpretResult;
-import domain.result.LintResult;
+import com.printscript.controller.request.InterpretRequest;
+import com.printscript.controller.request.RulesOperationRequest;
+import com.printscript.domain.result.FormatResult;
+import com.printscript.domain.result.InterpretResult;
+import com.printscript.domain.result.LintResult;
 import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
-import service.SnippetOperationService;
+import com.printscript.service.SnippetOperationService;
 
 /**
  * Sin logica: valida la entrada (@Valid) y delega. Los errores los traduce ApiExceptionHandler.

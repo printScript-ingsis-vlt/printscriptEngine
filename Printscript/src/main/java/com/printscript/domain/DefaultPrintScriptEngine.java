@@ -1,12 +1,12 @@
-package domain;
+package com.printscript.domain;
 
 import ast.PrintScriptVersion;
 import ast.Program;
-import domain.errors.ExecutionTimeoutException;
-import domain.interfaces.PrintScriptEngine;
-import domain.result.FormatResult;
-import domain.result.InterpretResult;
-import domain.result.LintResult;
+import com.printscript.domain.errors.ExecutionTimeoutException;
+import com.printscript.domain.interfaces.PrintScriptEngine;
+import com.printscript.domain.result.FormatResult;
+import com.printscript.domain.result.InterpretResult;
+import com.printscript.domain.result.LintResult;
 import formatter.FormattingRules;
 import interpreter.Output;
 import interpreter.ScriptInputProvider;

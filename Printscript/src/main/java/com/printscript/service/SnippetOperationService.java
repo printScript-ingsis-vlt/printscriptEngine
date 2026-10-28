@@ -1,11 +1,11 @@
-package service;
+package com.printscript.service;
 
 
-import domain.errors.FileRepository;
-import domain.interfaces.PrintScriptEngine;
-import domain.result.FormatResult;
-import domain.result.InterpretResult;
-import domain.result.LintResult;
+import com.printscript.domain.errors.FileRepository;
+import com.printscript.domain.interfaces.PrintScriptEngine;
+import com.printscript.domain.result.FormatResult;
+import com.printscript.domain.result.InterpretResult;
+import com.printscript.domain.result.LintResult;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
