@@ -3,6 +3,7 @@ package com.printscript.domain;
 import ast.PrintScriptVersion;
 import ast.Program;
 import com.printscript.domain.errors.ExecutionTimeoutException;
+import com.printscript.domain.errors.UnsupportedVersionException;
 import com.printscript.domain.interfaces.PrintScriptEngine;
 import com.printscript.domain.result.FormatResult;
 import com.printscript.domain.result.InterpretResult;
@@ -217,15 +218,18 @@ public class DefaultPrintScriptEngine implements PrintScriptEngine {
 
     private PrintScriptVersion parseVersion(String version) {
         try {
-            PrintScriptVersion parsed = PrintScriptVersion.Companion.fromString(version);
+            PrintScriptVersion parsed =
+                    PrintScriptVersion.Companion.fromString(version);
+
             if (parsed == null) {
-                throw new IllegalArgumentException("Version no soportada: " + version);
+                throw new UnsupportedVersionException(version);
             }
+
             return parsed;
-        } catch (IllegalArgumentException e) {
+        } catch (UnsupportedVersionException e) {
             throw e;
         } catch (Exception e) {
-            throw new IllegalArgumentException("Version no soportada: " + version, e);
+            throw new UnsupportedVersionException(version);
         }
     }
 

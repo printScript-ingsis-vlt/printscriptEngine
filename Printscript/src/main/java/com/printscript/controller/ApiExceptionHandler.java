@@ -3,6 +3,7 @@ package com.printscript.controller;
 import com.printscript.domain.errors.ExecutionTimeoutException;
 import com.printscript.domain.errors.StorageFileNotFoundException;
 import com.printscript.domain.errors.StorageUnavailableException;
+import com.printscript.domain.errors.UnsupportedVersionException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
@@ -62,5 +63,15 @@ public class ApiExceptionHandler {
 
     private ResponseEntity<ErrorResponse> build(HttpStatus status, String code, String message) {
         return ResponseEntity.status(status).body(new ErrorResponse(code, message));
+    }
+    @ExceptionHandler(UnsupportedVersionException.class)
+    public ResponseEntity<ErrorResponse> unsupportedVersion(
+            UnsupportedVersionException e
+    ) {
+        return build(
+                HttpStatus.BAD_REQUEST,
+                "UNSUPPORTED_VERSION",
+                e.getMessage()
+        );
     }
 }
