@@ -1,9 +1,6 @@
 package com.printscript.controller;
 
-import com.printscript.domain.errors.ExecutionTimeoutException;
-import com.printscript.domain.errors.StorageFileNotFoundException;
-import com.printscript.domain.errors.StorageUnavailableException;
-import com.printscript.domain.errors.UnsupportedVersionException;
+import com.printscript.domain.errors.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
@@ -71,6 +68,17 @@ public class ApiExceptionHandler {
         return build(
                 HttpStatus.BAD_REQUEST,
                 "UNSUPPORTED_VERSION",
+                e.getMessage()
+        );
+    }
+
+    @ExceptionHandler(InvalidLintConfigException.class)
+    public ResponseEntity<ErrorResponse> invalidLintConfig(
+            InvalidLintConfigException e
+    ) {
+        return build(
+                HttpStatus.BAD_REQUEST,
+                "INVALID_LINT_CONFIG",
                 e.getMessage()
         );
     }

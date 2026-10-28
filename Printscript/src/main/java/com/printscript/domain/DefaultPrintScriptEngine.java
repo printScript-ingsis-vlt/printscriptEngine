@@ -3,6 +3,7 @@ package com.printscript.domain;
 import ast.PrintScriptVersion;
 import ast.Program;
 import com.printscript.domain.errors.ExecutionTimeoutException;
+import com.printscript.domain.errors.InvalidLintConfigException;
 import com.printscript.domain.errors.UnsupportedVersionException;
 import com.printscript.domain.interfaces.PrintScriptEngine;
 import com.printscript.domain.result.FormatResult;
@@ -152,9 +153,11 @@ public class DefaultPrintScriptEngine implements PrintScriptEngine {
                         n.getPosition().getColumn()
                 ));
             }
-        } catch (Exception e) {
-            errors.add(messageOf(e));
-        }
+        }  catch (InvalidLintConfigException e) {
+                throw e;
+    } catch (Exception e) {
+        errors.add(messageOf(e));
+    }
 
         return new LintResult(issues, errors);
     }
@@ -285,15 +288,31 @@ public class DefaultPrintScriptEngine implements PrintScriptEngine {
 
     private LintConfig parseLintConfig(JSONObject json) {
         IdentifierFormat identifierFormat = IdentifierFormat.CAMEL_CASE;
-        if (json.has("identifier_format")) {
-            String value = json.getString("identifier_format");
-            identifierFormat = "snake case".equalsIgnoreCase(value)
-                    ? IdentifierFormat.SNAKE_CASE
-                    : IdentifierFormat.CAMEL_CASE;
+
+        if (json.has("identifier-format")) {
+            String value = json.getString("identifier-format");
+
+            identifierFormat = switch (value) {
+                case "camel-case" -> IdentifierFormat.CAMEL_CASE;
+                case "snake-case" -> IdentifierFormat.SNAKE_CASE;
+                default -> throw new InvalidLintConfigException(
+                        "Valor invalido para 'identifier-format': '" + value
+                                + "'. Valores permitidos: 'camel-case', 'snake-case'."
+                );
+            };
         }
-        boolean printlnArgumentCheck = json.optBoolean("mandatory-variable-or-literal-in-println", false);
-        boolean readInputArgumentCheck = json.optBoolean("mandatory-variable-or-literal-in-readInput", false);
-        return new LintConfig(identifierFormat, printlnArgumentCheck, readInputArgumentCheck);
+
+        boolean printlnArgumentCheck =
+                json.optBoolean("mandatory-variable-or-literal-in-println", false);
+
+        boolean readInputArgumentCheck =
+                json.optBoolean("mandatory-variable-or-literal-in-readInput", false);
+
+        return new LintConfig(
+                identifierFormat,
+                printlnArgumentCheck,
+                readInputArgumentCheck
+        );
     }
 
     private void reportError(Object error, List<String> errors) {
