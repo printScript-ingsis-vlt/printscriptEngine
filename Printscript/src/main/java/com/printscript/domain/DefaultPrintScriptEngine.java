@@ -131,7 +131,7 @@ public class DefaultPrintScriptEngine implements PrintScriptEngine {
             JSONObject json = toJson(lintConfigJson);
             LintConfig lintConfig = parseLintConfig(json);
 
-            boolean identifierFormatRequested = json.has("identifier_format");
+            boolean identifierFormatRequested = json.has("identifier-format");
 
             var notifications =
                     new linter.PrintScriptLinter(lintConfig).lint(parsed.program());
