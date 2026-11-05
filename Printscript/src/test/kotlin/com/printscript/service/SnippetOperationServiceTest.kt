@@ -7,6 +7,7 @@ import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class SnippetOperationServiceTest {
@@ -15,6 +16,7 @@ class SnippetOperationServiceTest {
     private class InMemoryFileRepository(vararg entries: Pair<String, String>) : FileRepository {
         val files = mutableMapOf(*entries)
         val reads = mutableListOf<String>()
+        val writes = mutableListOf<String>()
 
         override fun get(key: String): String {
             reads.add(key)
@@ -22,6 +24,7 @@ class SnippetOperationServiceTest {
         }
 
         override fun put(key: String, content: String) {
+            writes.add(key)
             files[key] = content
         }
     }
@@ -58,10 +61,54 @@ class SnippetOperationServiceTest {
     }
 
     @Test
-    fun `format aplica las reglas guardadas`() {
+    fun `format guarda el resultado en la key formatted y devuelve las dos keys`() {
         val result = service.format("snippet", "formatRules", "1.0")
 
-        assertTrue(result.formatted!!.contains("mi_variable: number=5;"), result.formatted)
+        assertEquals("snippet", result.snippetKey)
+        assertEquals("snippet.formatted", result.formattedKey)
+        assertTrue(result.errors.isEmpty())
+        assertTrue(repo.files.getValue("snippet.formatted").contains("mi_variable: number=5;"))
+    }
+
+    @Test
+    fun `format nunca pisa la original`() {
+        val original = repo.files.getValue("snippet")
+
+        service.format("snippet", "formatRules", "1.0")
+
+        assertEquals(original, repo.files.getValue("snippet"))
+        assertEquals(setOf("snippet.formatted"), repo.writes.toSet())
+    }
+
+    @Test
+    fun `formatear de nuevo reemplaza el formatted anterior`() {
+        repo.put("snippet.formatted", "viejo")
+
+        service.format("snippet", "formatRules", "1.0")
+
+        assertTrue(repo.files.getValue("snippet.formatted") != "viejo")
+    }
+
+    @Test
+    fun `si el snippet no compila no escribe nada y devuelve formattedKey null`() {
+        repo.files["roto"] = "let x: number = ;"
+
+        val result = service.format("roto", null, "1.0")
+
+        assertEquals("roto", result.snippetKey)
+        assertNull(result.formattedKey)
+        assertTrue(result.errors.isNotEmpty())
+        assertFalse(repo.files.containsKey("roto.formatted"))
+        assertTrue(repo.writes.isEmpty())
+    }
+
+    @Test
+    fun `validate acepta cualquier key, como un draft`() {
+        repo.files["snippet.draft"] = "let x: number = ;"
+
+        assertFalse(service.validate("snippet.draft", "1.0").valid)
+        assertEquals(listOf("snippet.draft"), repo.reads)
+        assertTrue(repo.writes.isEmpty())
     }
 
     @Test

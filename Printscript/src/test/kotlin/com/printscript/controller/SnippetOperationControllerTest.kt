@@ -6,7 +6,7 @@ import com.printscript.domain.errors.InvalidLintConfigException
 import com.printscript.domain.errors.StorageFileNotFoundException
 import com.printscript.domain.errors.StorageUnavailableException
 import com.printscript.domain.errors.UnsupportedVersionException
-import com.printscript.domain.result.FormatResult
+import com.printscript.domain.result.FormatOperationResult
 import com.printscript.domain.result.InterpretResult
 import com.printscript.domain.result.LintIssue
 import com.printscript.domain.result.LintResult
@@ -75,12 +75,25 @@ class SnippetOperationControllerTest {
     }
 
     @Test
-    fun `format devuelve el codigo formateado`() {
-        `when`(service.format("s", "r", "1.0")).thenReturn(FormatResult("let x = 1;", emptyList()))
+    fun `format devuelve la key original y la formateada`() {
+        `when`(service.format("s", "r", "1.0")).thenReturn(FormatOperationResult("s", "s.formatted", emptyList()))
 
         postJson("/format", rulesBody)
             .andExpect(status().isOk)
-            .andExpect(jsonPath("$.formatted").value("let x = 1;"))
+            .andExpect(jsonPath("$.snippetKey").value("s"))
+            .andExpect(jsonPath("$.formattedKey").value("s.formatted"))
+            .andExpect(jsonPath("$.errors").isEmpty)
+            .andExpect(jsonPath("$.formatted").doesNotExist())
+    }
+
+    @Test
+    fun `format con errores devuelve formattedKey null`() {
+        `when`(service.format("s", "r", "1.0")).thenReturn(FormatOperationResult("s", null, listOf("mal")))
+
+        postJson("/format", rulesBody)
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.formattedKey").value(null as Any?))
+            .andExpect(jsonPath("$.errors[0]").value("mal"))
     }
 
     @Test

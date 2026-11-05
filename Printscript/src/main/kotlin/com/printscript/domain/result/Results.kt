@@ -26,6 +26,12 @@ data class FormatResult(val formatted: String?, val errors: List<String>) {
 }
 
 /**
+ * Respuesta de /format. El codigo formateado se guarda en formattedKey sin pisar snippetKey.
+ * Si el snippet no compila no se escribe nada: formattedKey es null y el motivo va en errors.
+ */
+data class FormatOperationResult(val snippetKey: String, val formattedKey: String?, val errors: List<String>)
+
+/**
  * Error del codigo del usuario con su posicion.
  * rule sale del tipo de error: "lexical", "syntax" o "semantic".
  */

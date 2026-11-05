@@ -2,7 +2,7 @@ package com.printscript.controller
 
 import com.printscript.controller.request.InterpretRequest
 import com.printscript.controller.request.RulesOperationRequest
-import com.printscript.domain.result.FormatResult
+import com.printscript.domain.result.FormatOperationResult
 import com.printscript.domain.result.InterpretResult
 import com.printscript.domain.result.LintResult
 import com.printscript.domain.result.ValidationResult
@@ -31,7 +31,7 @@ class SnippetOperationController(private val service: SnippetOperationService) {
         service.lint(request.snippetKey!!, request.rulesKey, request.version!!)
 
     @PostMapping("/format")
-    fun format(@Valid @RequestBody request: RulesOperationRequest): FormatResult =
+    fun format(@Valid @RequestBody request: RulesOperationRequest): FormatOperationResult =
         service.format(request.snippetKey!!, request.rulesKey, request.version!!)
 
     @PostMapping("/validate")
