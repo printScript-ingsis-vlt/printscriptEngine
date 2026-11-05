@@ -87,7 +87,28 @@ GITHUB_USER=tu-usuario GITHUB_TOKEN=tu-token docker compose up -d --build
 curl http://localhost:8080/actuator/health
 ```
 
-El puerto se cambia con `ENGINE_HOST_PORT`.
+El compose levanta también el Asset Service (`asset_service`) y Azurite (el bucket emulado).
+Puertos: engine en `ENGINE_HOST_PORT` (8080) y Asset Service en `ASSET_HOST_PORT` (8081, Swagger en
+`/swagger-ui`). Para probar un snippet de punta a punta:
+
+```bash
+curl -X PUT --data-binary 'println("hola");' http://localhost:8081/v1/asset/snippets/hola.ps
+curl -X POST -H 'Content-Type: application/json' \
+  -d '{"snippetKey":"hola.ps","version":"1.1"}' http://localhost:8080/printscript/interpret
+```
+
+### Asset Service
+
+`AssetServiceFileRepository` implementa `FileRepository` con `GET`/`PUT /v1/asset/{container}/{key}`.
+
+| Variable / property | Default | Para qué |
+|---|---|---|
+| `ASSET_SERVICE_URL` (`asset.url`) | `http://localhost:8081` | URL del Asset Service |
+| `ASSET_CONTAINER` (`asset.container`) | `snippets` | Container donde viven snippets y reglas |
+| `asset.connect-timeout` / `asset.read-timeout` | `2s` / `10s` | Pasado eso, responde 503 |
+
+Un 404 del Asset Service se devuelve como `FILE_NOT_FOUND`. Cualquier otro error (5xx, conexión rechazada o
+timeout) se devuelve como `STORAGE_UNAVAILABLE`. Las keys no pueden tener `/`.
 
 ## Estructura
 
@@ -119,7 +140,3 @@ git config core.hooksPath .githooks
 - `pre-commit` corre `./gradlew check`.
 - `commit-msg` exige el formato `tipo(scope): descripción`. Tipos válidos: `feat`, `fix`, `docs`, `style`,
   `refactor`, `test`, `chore`, `build`.
-
-## Pendiente
-
-- Implementación de `FileRepository` contra el Asset Service. Sin ella el servicio no levanta fuera de los tests.

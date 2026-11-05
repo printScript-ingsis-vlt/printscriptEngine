@@ -1,9 +1,10 @@
 package com.printscript.domain.errors
 
 // no existe el archivo con esa key devuelvo 404
-class StorageFileNotFoundException(key: String) : RuntimeException("No existe el archivo: $key")
+class StorageFileNotFoundException(key: String, cause: Throwable? = null) :
+    RuntimeException("No existe el archivo: $key", cause)
 
-/** El almacenamiento (S3) no responde o fallo. El controller deberia mapearla a 502/503. */
+/** El almacenamiento (Asset Service) no responde o fallo. El controller deberia mapearla a 502/503. */
 class StorageUnavailableException(message: String, cause: Throwable?) : RuntimeException(message, cause)
 
 // ejecucion despues del tiempo permitido. El controller deberia mapearla a 408/504.

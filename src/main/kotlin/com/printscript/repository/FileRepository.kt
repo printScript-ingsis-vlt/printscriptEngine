@@ -1,7 +1,7 @@
 package com.printscript.repository
 
 /**
- * Acceso al almacenamiento de archivos (S3). Devuelve datos crudos, sin logica del lenguaje.
+ * Acceso al almacenamiento de archivos (Asset Service). Devuelve datos crudos, sin logica del lenguaje.
  * Lanza StorageFileNotFoundException si la key no existe y
  * StorageUnavailableException si el bucket no responde.
  */

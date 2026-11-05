@@ -8,7 +8,7 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean
 @SpringBootTest
 class PrintscriptApplicationTests {
 
-    // Todavia no hay implementacion real de FileRepository (S3); se mockea para levantar el contexto.
+    // Se mockea FileRepository para levantar el contexto sin depender del Asset Service.
     @MockitoBean
     lateinit var fileRepository: FileRepository
 
