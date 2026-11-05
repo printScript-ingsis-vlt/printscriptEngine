@@ -1,0 +1,59 @@
+name: CI, publish image and notify infrastructure
+
+# check corre local en vez de usar el check.yml comun: el comun no le pasa ningun token a Gradle
+# y este proyecto necesita uno para bajar las librerias de PrintScript de GitHub Packages.
+# Hace lo mismo que el comun (Java 21 + ./gradlew check detekt test) agregando GITHUB_TOKEN.
+# Cuando el comun lo exponga, se puede reemplazar por:
+#   uses: printScript-ingsis-vlt/common-configurations/.github/workflows/check.yml@main
+
+on:
+  pull_request:
+    branches: [dev, prod]
+  push:
+    branches: [dev, prod]
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Java 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: gradle
+
+      - name: Run checks
+        # build.gradle lee GITHUB_ACTOR y GITHUB_TOKEN para bajar las librerias de PrintScript
+        # de GitHub Packages.
+        env:
+          GITHUB_TOKEN: ${{ secrets.GPR_TOKEN }}
+        run: ./gradlew check detekt test
+
+  publish:
+    needs: check
+    if: github.event_name == 'push'
+    uses: printScript-ingsis-vlt/common-configurations/.github/workflows/publish.yml@main
+    with:
+      image_repository: ghcr.io/printscript-ingsis-vlt/print-script-engine
+      environment: ${{ github.ref_name }}
+    secrets:
+      gpr_token: ${{ secrets.GPR_TOKEN }}
+
+  notify:
+    needs: publish
+    if: github.event_name == 'push'
+    uses: printScript-ingsis-vlt/common-configurations/.github/workflows/notify.yml@main
+    with:
+      service: print-script-engine
+      environment: ${{ github.ref_name }}
+      image: ${{ needs.publish.outputs.image }}
+    secrets:
+      INFRA_DISPATCH_TOKEN: ${{ secrets.INFRA_DISPATCH_TOKEN }}

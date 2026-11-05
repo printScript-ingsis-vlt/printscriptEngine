@@ -1,0 +1,24 @@
+# Levanta el engine en local: GITHUB_USER=... GITHUB_TOKEN=... docker compose up --build
+# El token solo se usa al construir (para bajar las librerias de PrintScript de GitHub Packages)
+# y entra como secret de BuildKit, asi que no queda en la imagen.
+services:
+  print-script-engine:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        GITHUB_USER: ${GITHUB_USER}
+      secrets:
+        - gpr_token
+    ports:
+      - "${ENGINE_HOST_PORT:-8080}:8080"
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "--silent", "--show-error", "http://localhost:8080/actuator/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+secrets:
+  gpr_token:
+    environment: GITHUB_TOKEN
