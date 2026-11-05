@@ -12,6 +12,10 @@ services:
         - gpr_token
     ports:
       - "${ENGINE_HOST_PORT:-8080}:8080"
+    environment:
+      ASSET_SERVICE_URL: "http://asset_service:8080"
+    depends_on:
+      - asset_service
     healthcheck:
       test: ["CMD", "curl", "--fail", "--silent", "--show-error", "http://localhost:8080/actuator/health"]
       interval: 10s
@@ -19,6 +23,32 @@ services:
       retries: 5
       start_period: 30s
 
+  # Asset Service de la catedra: API HTTP (GET/PUT/DELETE /v1/asset/{container}/{key}) sobre el bucket.
+  # Swagger en http://localhost:8081/swagger-ui
+  asset_service:
+    container_name: "asset_service"
+    image: ghcr.io/austral-ingsis/snippet-asset-service:latest
+    ports:
+      - "${ASSET_HOST_PORT:-8081}:8080"
+    environment:
+      AZURE_HOST: "http://azurite"
+      NEW_RELIC_APP_NAME: "asset-service"
+      NEW_RELIC_AGENT_ENABLED: false
+    depends_on:
+      - azurite
+
+  # Emulador local de Azure Blob Storage (el bucket).
+  azurite:
+    image: mcr.microsoft.com/azure-storage/azurite
+    container_name: "azurite"
+    hostname: azurite
+    restart: always
+    volumes:
+      - blob:/workspace
+
 secrets:
   gpr_token:
     environment: GITHUB_TOKEN
+
+volumes:
+  blob:
