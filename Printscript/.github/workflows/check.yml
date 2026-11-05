@@ -1,0 +1,11 @@
+name: Check
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+jobs:
+  check:
+    uses: printScript-ingsis-vlt/common-configurations/.github/workflows/check.yml@main
