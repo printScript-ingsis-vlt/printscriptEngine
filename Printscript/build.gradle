@@ -1,5 +1,6 @@
 plugins {
-	id 'java'
+	id 'org.jetbrains.kotlin.jvm' version '2.2.20'
+	id 'org.jetbrains.kotlin.plugin.spring' version '2.2.20'
 	id 'org.springframework.boot' version '3.5.7'
 	id 'io.spring.dependency-management' version '1.1.7'
 }
@@ -10,6 +11,13 @@ version = '0.0.1-SNAPSHOT'
 java {
 	toolchain {
 		languageVersion = JavaLanguageVersion.of(21)
+	}
+}
+
+kotlin {
+	compilerOptions {
+		// Las anotaciones de validacion (@NotBlank) en parametros del constructor se aplican tambien al campo.
+		freeCompilerArgs.addAll '-Xjsr305=strict', '-Xannotation-default-target=param-property'
 	}
 }
 
@@ -30,6 +38,11 @@ dependencies {
 	implementation 'org.springframework.boot:spring-boot-starter-web'
 	testImplementation 'org.springframework.boot:spring-boot-starter-test'
 	implementation 'org.springframework.boot:spring-boot-starter-validation'
+
+	// Kotlin
+	implementation 'com.fasterxml.jackson.module:jackson-module-kotlin'
+	implementation 'org.jetbrains.kotlin:kotlin-reflect'
+	testImplementation 'org.jetbrains.kotlin:kotlin-test-junit5'
 
 	// Tu lenguaje
 	implementation 'com.printscript:common-ast:1.2.0'
