@@ -1,6 +1,7 @@
 package com.printscript.controller
 
 import com.printscript.domain.errors.ExecutionTimeoutException
+import com.printscript.domain.errors.InvalidFormatConfigException
 import com.printscript.domain.errors.InvalidLintConfigException
 import com.printscript.domain.errors.StorageFileNotFoundException
 import com.printscript.domain.errors.StorageUnavailableException
@@ -54,6 +55,10 @@ class ApiExceptionHandler {
     @ExceptionHandler(InvalidLintConfigException::class)
     fun invalidLintConfig(e: InvalidLintConfigException): ResponseEntity<ErrorResponse> =
         build(HttpStatus.BAD_REQUEST, "INVALID_LINT_CONFIG", e.message)
+
+    @ExceptionHandler(InvalidFormatConfigException::class)
+    fun invalidFormatConfig(e: InvalidFormatConfigException): ResponseEntity<ErrorResponse> =
+        build(HttpStatus.BAD_REQUEST, "INVALID_FORMAT_CONFIG", e.message)
 
     @ExceptionHandler(Exception::class)
     fun unexpected(e: Exception): ResponseEntity<ErrorResponse> {

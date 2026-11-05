@@ -66,7 +66,7 @@ class SnippetOperationServiceTest {
 
     @Test
     fun `validate lee el snippet y lo valida`() {
-        assertTrue(service.validate("snippet", "1.0").valid())
+        assertTrue(service.validate("snippet", "1.0").valid)
     }
 
     @Test

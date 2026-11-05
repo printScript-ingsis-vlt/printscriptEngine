@@ -10,6 +10,10 @@ class StorageUnavailableException(message: String, cause: Throwable?) : RuntimeE
 class ExecutionTimeoutException(seconds: Long) :
     RuntimeException("La ejecucion supero el limite de $seconds segundos")
 
-class InvalidLintConfigException(message: String) : RuntimeException(message)
+// El JSON de reglas de lint es invalido (mal formado o con valores que no corresponden). 400.
+class InvalidLintConfigException(message: String, cause: Throwable? = null) : RuntimeException(message, cause)
+
+// El JSON de reglas de formato es invalido (mal formado o con valores que no corresponden). 400.
+class InvalidFormatConfigException(message: String, cause: Throwable? = null) : RuntimeException(message, cause)
 
 class UnsupportedVersionException(version: String?) : RuntimeException("Version no soportada: $version")

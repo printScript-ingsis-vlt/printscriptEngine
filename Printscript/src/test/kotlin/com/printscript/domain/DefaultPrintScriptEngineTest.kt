@@ -1,5 +1,6 @@
 package com.printscript.domain
 
+import com.printscript.domain.errors.InvalidFormatConfigException
 import com.printscript.domain.errors.InvalidLintConfigException
 import com.printscript.domain.errors.UnsupportedVersionException
 import org.junit.jupiter.api.Nested
@@ -159,10 +160,20 @@ class DefaultPrintScriptEngineTest {
         }
 
         @Test
-        fun `una config que no es JSON valido se devuelve en errors`() {
-            val result = engine.lint("let x: number = 5;", "1.0", "{no es json")
+        fun `una config que no es JSON valido lanza InvalidLintConfigException`() {
+            assertThrows<InvalidLintConfigException> { engine.lint("let x: number = 5;", "1.0", "{no es json") }
+        }
 
-            assertTrue(result.errors.isNotEmpty())
+        @Test
+        fun `una regla con tipo invalido lanza InvalidLintConfigException`() {
+            assertThrows<InvalidLintConfigException> {
+                engine.lint("let x: number = 5;", "1.0", """{"identifier-format":123}""")
+            }
+        }
+
+        @Test
+        fun `la config invalida gana aunque el snippet tampoco compile`() {
+            assertThrows<InvalidLintConfigException> { engine.lint("let x: number = ;", "1.0", "{no es json") }
         }
 
         @Test
@@ -257,11 +268,15 @@ class DefaultPrintScriptEngineTest {
         }
 
         @Test
-        fun `una config con tipo invalido se devuelve en errors`() {
-            val result = engine.format("let x: number = 5;", "1.0", """{"indent-inside-if":"mucho"}""")
+        fun `una regla con tipo invalido lanza InvalidFormatConfigException`() {
+            assertThrows<InvalidFormatConfigException> {
+                engine.format("let x: number = 5;", "1.0", """{"indent-inside-if":"mucho"}""")
+            }
+        }
 
-            assertNull(result.formatted)
-            assertTrue(result.errors.isNotEmpty())
+        @Test
+        fun `una config que no es JSON valido lanza InvalidFormatConfigException`() {
+            assertThrows<InvalidFormatConfigException> { engine.format("let x: number = 5;", "1.0", "[1, 2") }
         }
     }
 
@@ -272,26 +287,45 @@ class DefaultPrintScriptEngineTest {
         fun `codigo valido no tiene errores`() {
             val result = engine.validate("let x: number = 5;", "1.0")
 
-            assertTrue(result.valid())
+            assertTrue(result.valid)
         }
 
         @Test
-        fun `codigo invalido devuelve errores sin posicion`() {
-            val result = engine.validate("let x: number = ;", "1.0")
+        fun `un error de sintaxis trae rule syntax y su posicion`() {
+            val result = engine.validate("let x: number = 5;\nlet y: number = ;", "1.0")
 
-            assertFalse(result.valid())
-            assertNull(result.errors.first().line)
-            assertNull(result.errors.first().column)
+            assertFalse(result.valid)
+            val error = result.errors.single()
+            assertEquals("syntax", error.rule)
+            assertEquals(2, error.line)
+            assertNotNull(error.column)
+            assertTrue(error.message.isNotBlank())
         }
 
         @Test
-        fun `un error semantico invalida el codigo`() {
-            assertFalse(engine.validate("let x: number = \"a\";", "1.0").valid())
+        fun `un error lexico trae rule lexical y su posicion`() {
+            val result = engine.validate("let x: number = 5;\nlet y: number = 5 # 3;", "1.0")
+
+            val error = result.errors.single()
+            assertEquals("lexical", error.rule)
+            assertEquals(2, error.line)
+            assertNotNull(error.column)
+        }
+
+        @Test
+        fun `un error semantico trae rule semantic y su posicion`() {
+            val result = engine.validate("let x: number = 5;\n\nlet y: number = \"a\";", "1.0")
+
+            assertFalse(result.valid)
+            val error = result.errors.first()
+            assertEquals("semantic", error.rule)
+            assertEquals(3, error.line)
+            assertNotNull(error.column)
         }
 
         @Test
         fun `la version 1_1 no es valida en 1_0`() {
-            assertFalse(engine.validate("if (true) { println(1); }", "1.0").valid())
+            assertFalse(engine.validate("if (true) { println(1); }", "1.0").valid)
         }
 
         @Test

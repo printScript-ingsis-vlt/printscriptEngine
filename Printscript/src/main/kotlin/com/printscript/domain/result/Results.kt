@@ -1,6 +1,8 @@
 package com.printscript.domain.result
 
-// success()/valid() son funciones (no propiedades) para que Jackson no las agregue al JSON,
+import com.fasterxml.jackson.annotation.JsonPropertyOrder
+
+// success() es funcion (no propiedad) para que Jackson no la agregue al JSON,
 // igual que pasaba con los records de Java.
 
 data class InterpretResult(val output: List<String>, val errors: List<String>) {
@@ -23,8 +25,15 @@ data class FormatResult(val formatted: String?, val errors: List<String>) {
     fun success(): Boolean = errors.isEmpty() && formatted != null
 }
 
-data class ValidationError(val message: String, val line: Int?, val column: Int?)
+/**
+ * Error del codigo del usuario con su posicion.
+ * rule sale del tipo de error: "lexical", "syntax" o "semantic".
+ */
+data class ValidationError(val rule: String, val message: String, val line: Int?, val column: Int?)
 
+/** valid es una propiedad calculada para que salga en el JSON: { "valid": false, "errors": [...] }. */
+@JsonPropertyOrder("valid", "errors")
 data class ValidationResult(val errors: List<ValidationError>) {
-    fun valid(): Boolean = errors.isEmpty()
+    val valid: Boolean
+        get() = errors.isEmpty()
 }

@@ -3,6 +3,7 @@ package com.printscript.domain
 import ast.PrintScriptVersion
 import ast.Program
 import com.printscript.domain.errors.ExecutionTimeoutException
+import com.printscript.domain.errors.InvalidFormatConfigException
 import com.printscript.domain.errors.InvalidLintConfigException
 import com.printscript.domain.errors.UnsupportedVersionException
 import com.printscript.domain.interfaces.PrintScriptEngine
@@ -22,6 +23,7 @@ import lexer.StreamLexer
 import linter.PrintScriptLinter
 import linter.config.IdentifierFormat
 import linter.config.LintConfig
+import org.json.JSONException
 import org.json.JSONObject
 import org.json.JSONTokener
 import org.springframework.stereotype.Component
@@ -29,7 +31,10 @@ import parser.streamRules.StreamGrammarConfigurations
 import pipeline.PipelineResult
 import pipeline.StreamPipeline
 import result.CompilerError
+import result.LexicalError
 import result.Result
+import result.SemanticError
+import result.SyntaxError
 import semantic.SemanticAnalyzer
 import semantic.SemanticConfigurations
 import token.Token
@@ -101,9 +106,9 @@ class DefaultPrintScriptEngine : PrintScriptEngine {
             val pipeline = StreamPipeline(version, out, input, SystemEnvProvider())
 
             when (val result = pipeline.run(StringReader(code))) {
-                is PipelineResult.LexicalFailure -> reportError(result.error, errors)
-                is PipelineResult.SyntaxFailure -> reportError(result.error, errors)
-                is PipelineResult.SemanticFailure -> result.errors.forEach { reportError(it, errors) }
+                is PipelineResult.LexicalFailure -> toCodeErrors(result.error).mapTo(errors) { it.message }
+                is PipelineResult.SyntaxFailure -> toCodeErrors(result.error).mapTo(errors) { it.message }
+                is PipelineResult.SemanticFailure -> toCodeErrors(result.errors).mapTo(errors) { it.message }
                 else -> Unit
             }
         } catch (e: Throwable) {
@@ -114,70 +119,60 @@ class DefaultPrintScriptEngine : PrintScriptEngine {
 
     // -------------------------------------------------------------------- lint
 
+    /**
+     * issues = el snippet no cumple las reglas; errors = el codigo no compila.
+     * Una config invalida lanza InvalidLintConfigException (400) y un fallo inesperado
+     * del linter sale como 500: ninguno de los dos se mezcla con issues/errors.
+     */
     override fun lint(code: String, version: String, lintConfigJson: String?): LintResult {
         val psVersion = parseVersion(version)
-        val issues = mutableListOf<LintIssue>()
-        val errors = mutableListOf<String>()
+        val json = toConfigJson(lintConfigJson, ::InvalidLintConfigException)
+        val lintConfig = parseLintConfig(json)
+        val identifierFormatRequested = json.has("identifier-format")
 
-        try {
-            val parsed = parse(code, psVersion, errors, semanticCheck = true)
-                ?: return LintResult(issues, errors)
+        val errors = mutableListOf<ValidationError>()
+        val parsed = parse(code, psVersion, errors, semanticCheck = true)
+            ?: return LintResult(emptyList(), errors.map { it.message })
 
-            val json = toJson(lintConfigJson)
-            val lintConfig = parseLintConfig(json)
-            val identifierFormatRequested = json.has("identifier-format")
-
-            PrintScriptLinter(lintConfig).lint(parsed.program)
-                .filter { identifierFormatRequested || it.rule != "identifier-format" }
-                .mapTo(issues) {
-                    LintIssue(
-                        rule = it.rule,
-                        severity = it.severity.toString(),
-                        message = it.message,
-                        line = it.position.line,
-                        column = it.position.column,
-                    )
-                }
-        } catch (e: InvalidLintConfigException) {
-            throw e
-        } catch (e: Exception) {
-            errors.add(messageOf(e))
-        }
-
-        return LintResult(issues, errors)
+        val issues = PrintScriptLinter(lintConfig).lint(parsed.program)
+            .filter { identifierFormatRequested || it.rule != "identifier-format" }
+            .map {
+                LintIssue(
+                    rule = it.rule,
+                    severity = it.severity.toString(),
+                    message = it.message,
+                    line = it.position.line,
+                    column = it.position.column,
+                )
+            }
+        return LintResult(issues, emptyList())
     }
 
     // ------------------------------------------------------------------ format
 
+    /** Igual criterio que lint: config invalida -> InvalidFormatConfigException (400), fallo inesperado -> 500. */
     override fun format(code: String, version: String, formatConfigJson: String?): FormatResult {
         val psVersion = parseVersion(version)
-        val errors = mutableListOf<String>()
-        return try {
-            // El formatter original no hacia chequeo semantico; se mantiene asi.
-            val parsed = parse(code, psVersion, errors, semanticCheck = false)
-                ?: return FormatResult(null, errors)
-            val rules = parseFormattingRules(toJson(formatConfigJson))
-            val formatted = PrintScriptFormatter(rules).format(parsed.tokens, parsed.program)
-            FormatResult(formatted, errors)
-        } catch (e: Exception) {
-            errors.add(messageOf(e))
-            FormatResult(null, errors)
-        }
+        val rules = parseFormattingRules(
+            toConfigJson(formatConfigJson, ::InvalidFormatConfigException),
+        )
+
+        val errors = mutableListOf<ValidationError>()
+        // El formatter original no hacia chequeo semantico; se mantiene asi.
+        val parsed = parse(code, psVersion, errors, semanticCheck = false)
+            ?: return FormatResult(null, errors.map { it.message })
+
+        return FormatResult(PrintScriptFormatter(rules).format(parsed.tokens, parsed.program), emptyList())
     }
 
     // ---------------------------------------------------------------- validate
 
+    /** Devuelve los errores lexicos, sintacticos y semanticos con su regla, linea y columna. */
     override fun validate(code: String, version: String): ValidationResult {
         val psVersion = parseVersion(version)
-        val errors = mutableListOf<String>()
-
-        try {
-            parse(code, psVersion, errors, semanticCheck = true)
-        } catch (e: Exception) {
-            errors.add(messageOf(e))
-        }
-
-        return ValidationResult(errors.map { ValidationError(it, null, null) })
+        val errors = mutableListOf<ValidationError>()
+        parse(code, psVersion, errors, semanticCheck = true)
+        return ValidationResult(errors)
     }
 
     // ----------------------------------------------------------------- helpers
@@ -189,13 +184,13 @@ class DefaultPrintScriptEngine : PrintScriptEngine {
     private fun parse(
         code: String,
         version: PrintScriptVersion,
-        errors: MutableList<String>,
+        errors: MutableList<ValidationError>,
         semanticCheck: Boolean,
     ): Parsed? {
         val lexerConfig = LexerConfigurations.getConfiguration(version)
         val tokens = when (val tokenResult = StreamLexer(StringReader(code), lexerConfig).tokenize()) {
             is Result.Failure<*> -> {
-                reportError(tokenResult.error, errors)
+                errors += toCodeErrors(tokenResult.error)
                 return null
             }
             is Result.Success<*> -> tokenResult.value as List<Token>
@@ -204,7 +199,7 @@ class DefaultPrintScriptEngine : PrintScriptEngine {
         val parser = StreamGrammarConfigurations.getConfiguration(version)
         val program = when (val parseResult = parser.parse(tokens)) {
             is Result.Failure<*> -> {
-                reportError(parseResult.error, errors)
+                errors += toCodeErrors(parseResult.error)
                 return null
             }
             is Result.Success<*> -> parseResult.value as Program
@@ -214,7 +209,7 @@ class DefaultPrintScriptEngine : PrintScriptEngine {
             val semanticConfig = SemanticConfigurations.getConfiguration(version)
             val semanticErrors = SemanticAnalyzer(semanticConfig).analyze(program)
             if (semanticErrors.isNotEmpty()) {
-                semanticErrors.forEach { reportError(it, errors) }
+                errors += toCodeErrors(semanticErrors)
                 return null
             }
         }
@@ -230,10 +225,25 @@ class DefaultPrintScriptEngine : PrintScriptEngine {
             throw UnsupportedVersionException(version)
         }
 
-    private fun toJson(json: String?): JSONObject =
-        if (json.isNullOrBlank()) JSONObject() else JSONObject(JSONTokener(json))
+    /**
+     * Parsea el JSON de reglas. Si esta mal formado lanza la excepcion que arma [invalid],
+     * asi un error de configuracion nunca se confunde con un error del snippet.
+     */
+    private fun toConfigJson(json: String?, invalid: (String, Throwable) -> RuntimeException): JSONObject =
+        try {
+            if (json.isNullOrBlank()) JSONObject() else JSONObject(JSONTokener(json))
+        } catch (e: JSONException) {
+            throw invalid("Las reglas no son un JSON valido: ${e.message}", e)
+        }
 
-    private fun parseFormattingRules(json: JSONObject): FormattingRules {
+    private fun parseFormattingRules(json: JSONObject): FormattingRules =
+        try {
+            buildFormattingRules(json)
+        } catch (e: JSONException) {
+            throw InvalidFormatConfigException("Reglas de formato invalidas: ${e.message}", e)
+        }
+
+    private fun buildFormattingRules(json: JSONObject): FormattingRules {
         val forceSingleSpace = json.optBoolean("mandatory-single-space-separation", false)
         val forced: Boolean? = if (forceSingleSpace) true else null
 
@@ -262,7 +272,14 @@ class DefaultPrintScriptEngine : PrintScriptEngine {
         )
     }
 
-    private fun parseLintConfig(json: JSONObject): LintConfig {
+    private fun parseLintConfig(json: JSONObject): LintConfig =
+        try {
+            buildLintConfig(json)
+        } catch (e: JSONException) {
+            throw InvalidLintConfigException("Reglas de lint invalidas: ${e.message}", e)
+        }
+
+    private fun buildLintConfig(json: JSONObject): LintConfig {
         val identifierFormat =
             if (json.has("identifier-format")) {
                 when (val value = json.getString("identifier-format")) {
@@ -284,13 +301,23 @@ class DefaultPrintScriptEngine : PrintScriptEngine {
         )
     }
 
-    private fun reportError(error: Any?, errors: MutableList<String>) {
+    /** Convierte los errores del compilador en ValidationError con regla y posicion. */
+    private fun toCodeErrors(error: Any?): List<ValidationError> =
         when (error) {
-            is CompilerError -> errors.add(error.message)
-            is List<*> -> error.forEach { reportError(it, errors) }
-            else -> errors.add(error.toString())
+            is CompilerError -> listOf(
+                ValidationError(ruleOf(error), error.message, error.position.line, error.position.column),
+            )
+            is List<*> -> error.flatMap { toCodeErrors(it) }
+            else -> listOf(ValidationError("unknown", error.toString(), null, null))
         }
-    }
+
+    private fun ruleOf(error: CompilerError): String =
+        when (error) {
+            is LexicalError -> "lexical"
+            is SyntaxError -> "syntax"
+            is SemanticError -> "semantic"
+            else -> "unknown"
+        }
 
     private fun messageOf(e: Throwable): String = e.message ?: e.toString()
 

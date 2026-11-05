@@ -1,6 +1,7 @@
 package com.printscript.controller
 
 import com.printscript.domain.errors.ExecutionTimeoutException
+import com.printscript.domain.errors.InvalidFormatConfigException
 import com.printscript.domain.errors.InvalidLintConfigException
 import com.printscript.domain.errors.StorageFileNotFoundException
 import com.printscript.domain.errors.StorageUnavailableException
@@ -83,12 +84,27 @@ class SnippetOperationControllerTest {
     }
 
     @Test
-    fun `validate devuelve los errores`() {
-        `when`(service.validate("s", "1.0")).thenReturn(ValidationResult(listOf(ValidationError("mal", null, null))))
+    fun `validate devuelve valid y los errores con regla y posicion`() {
+        `when`(service.validate("s", "1.0"))
+            .thenReturn(ValidationResult(listOf(ValidationError("syntax", "mal", 3, 12))))
 
         postJson("/validate", rulesBody)
             .andExpect(status().isOk)
+            .andExpect(jsonPath("$.valid").value(false))
+            .andExpect(jsonPath("$.errors[0].rule").value("syntax"))
             .andExpect(jsonPath("$.errors[0].message").value("mal"))
+            .andExpect(jsonPath("$.errors[0].line").value(3))
+            .andExpect(jsonPath("$.errors[0].column").value(12))
+    }
+
+    @Test
+    fun `validate sin errores devuelve valid true`() {
+        `when`(service.validate("s", "1.0")).thenReturn(ValidationResult(emptyList()))
+
+        postJson("/validate", rulesBody)
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.valid").value(true))
+            .andExpect(jsonPath("$.errors").isEmpty)
     }
 
     // ------------------------------------------------------ validacion del body
@@ -143,6 +159,10 @@ class SnippetOperationControllerTest {
     @Test
     fun `config de lint invalida devuelve 400`() =
         expectError(InvalidLintConfigException("mal"), 400, "INVALID_LINT_CONFIG")
+
+    @Test
+    fun `config de formato invalida devuelve 400`() =
+        expectError(InvalidFormatConfigException("mal"), 400, "INVALID_FORMAT_CONFIG")
 
     @Test
     fun `argumento invalido devuelve 400`() =
