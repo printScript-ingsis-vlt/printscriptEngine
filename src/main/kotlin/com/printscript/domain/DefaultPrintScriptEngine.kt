@@ -13,6 +13,7 @@ import com.printscript.domain.result.LintIssue
 import com.printscript.domain.result.LintResult
 import com.printscript.domain.result.ValidationError
 import com.printscript.domain.result.ValidationResult
+import formatter.FormatterConfigurations
 import formatter.FormattingRules
 import formatter.PrintScriptFormatter
 import interpreter.Output
@@ -20,6 +21,7 @@ import interpreter.ScriptInputProvider
 import interpreter.MockEnvProvider
 import lexer.LexerConfigurations
 import lexer.StreamLexer
+import linter.LinterConfigurations
 import linter.PrintScriptLinter
 import linter.config.IdentifierFormat
 import linter.config.LintConfig
@@ -87,11 +89,11 @@ class DefaultPrintScriptEngine : PrintScriptEngine {
             // Output y ScriptInputProvider son interfaces Kotlin comunes (no "fun interface"),
             // por eso se implementan con object en vez de lambda.
             val out = object : Output {
-                override fun write(line: String) {
+                override fun write(text: String) {
                     check(output.size < MAX_OUTPUT_LINES) {
                         "Se supero el maximo de $MAX_OUTPUT_LINES lineas de salida"
                     }
-                    output.add(line)
+                    output.add(text)
                 }
             }
             val input = object : ScriptInputProvider {
@@ -137,7 +139,8 @@ class DefaultPrintScriptEngine : PrintScriptEngine {
         val parsed = parse(code, psVersion, errors, semanticCheck = true)
             ?: return LintResult(emptyList(), errors.map { it.message })
 
-        val issues = PrintScriptLinter(lintConfig).lint(parsed.program)
+        val issues = PrintScriptLinter(lintConfig, LinterConfigurations.getConfiguration(psVersion))
+            .lint(parsed.program)
             .filter { identifierFormatRequested || it.rule != "identifier-format" }
             .map {
                 LintIssue(
@@ -165,7 +168,8 @@ class DefaultPrintScriptEngine : PrintScriptEngine {
         val parsed = parse(code, psVersion, errors, semanticCheck = false)
             ?: return FormatResult(null, errors.map { it.message })
 
-        return FormatResult(PrintScriptFormatter(rules).format(parsed.tokens, parsed.program), emptyList())
+        val formatter = PrintScriptFormatter(rules, FormatterConfigurations.getConfiguration(psVersion))
+        return FormatResult(formatter.format(parsed.tokens, parsed.program), emptyList())
     }
 
     // ---------------------------------------------------------------- validate
@@ -317,7 +321,6 @@ class DefaultPrintScriptEngine : PrintScriptEngine {
             is LexicalError -> "lexical"
             is SyntaxError -> "syntax"
             is SemanticError -> "semantic"
-            else -> "unknown"
         }
 
     private fun messageOf(e: Throwable): String = e.message ?: e.toString()
