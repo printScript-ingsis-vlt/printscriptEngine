@@ -1,0 +1,120 @@
+plugins {
+	id 'org.jetbrains.kotlin.jvm' version '2.2.20'
+	id 'org.jetbrains.kotlin.plugin.spring' version '2.2.20'
+	id 'org.springframework.boot' version '3.5.7'
+	id 'io.spring.dependency-management' version '1.1.7'
+	id 'jacoco'
+	id 'io.gitlab.arturbosch.detekt' version '1.23.8'
+}
+
+group = 'com.printscript'
+version = '0.0.1-SNAPSHOT'
+
+java {
+	toolchain {
+		languageVersion = JavaLanguageVersion.of(21)
+	}
+}
+
+kotlin {
+	compilerOptions {
+		// Las anotaciones de validacion (@NotBlank) en parametros del constructor se aplican tambien al campo.
+		freeCompilerArgs.addAll '-Xjsr305=strict', '-Xannotation-default-target=param-property'
+	}
+}
+
+repositories {
+	mavenCentral()
+	maven {
+		name = "GitHubPackages"
+		url = uri("https://maven.pkg.github.com/printScript-ingsis-vlt/print-script-ingsis")
+		credentials {
+			username = project.findProperty("gpr.user") ?: System.getenv("GITHUB_USER") ?: System.getenv("GITHUB_ACTOR")
+			password = project.findProperty("gpr.key") ?: System.getenv("GITHUB_TOKEN")
+		}
+	}
+}
+
+dependencies {
+	// Spring
+	implementation 'org.springframework.boot:spring-boot-starter-web'
+	testImplementation 'org.springframework.boot:spring-boot-starter-test'
+	implementation 'org.springframework.boot:spring-boot-starter-validation'
+	implementation 'org.springframework.boot:spring-boot-starter-actuator'
+
+	// Kotlin
+	implementation 'com.fasterxml.jackson.module:jackson-module-kotlin'
+	implementation 'org.jetbrains.kotlin:kotlin-reflect'
+	testImplementation 'org.jetbrains.kotlin:kotlin-test-junit5'
+
+	// Tu lenguaje
+	implementation 'com.printscript:common-ast:1.2.1'
+	implementation 'com.printscript:common-lexer-parser:1.2.1'
+	implementation 'com.printscript:common-result:1.2.1'
+	implementation 'com.printscript:common-runtime:1.2.1'
+	implementation 'com.printscript:lexer:1.2.1'
+	implementation 'com.printscript:parser:1.2.1'
+	implementation 'com.printscript:semantic:1.2.1'
+	implementation 'com.printscript:interpreter:1.2.1'
+	implementation 'com.printscript:formatter:1.2.1'
+	implementation 'com.printscript:linter:1.2.1'
+	implementation 'com.printscript:pipeline:1.2.1'
+	implementation 'org.json:json:20240303'
+}
+
+// detekt: lo corre el check comun (`./gradlew check detekt test`).
+detekt {
+	buildUponDefaultConfig = true
+	config.setFrom(files('config/detekt/detekt.yml'))
+}
+
+// detekt 1.23 esta compilado con Kotlin 2.0.21 y el plugin de Spring le fuerza la version
+// de Kotlin del proyecto: se la devolvemos para que no falle al arrancar.
+configurations.matching { it.name == 'detekt' }.configureEach {
+	resolutionStrategy.eachDependency {
+		if (requested.group == 'org.jetbrains.kotlin') {
+			useVersion '2.0.21'
+		}
+	}
+}
+
+tasks.named('jar') { enabled = false }   // evita el -plain.jar
+
+tasks.named('test') {
+	useJUnitPlatform()
+	finalizedBy 'jacocoTestReport'
+}
+
+// Coverage: reporte en build/reports/jacoco/test/html/index.html
+// y `./gradlew check` falla si las lineas cubiertas bajan del 80%.
+def coverageExclusions = ['com/printscript/PrintscriptApplicationKt.class']
+
+tasks.named('jacocoTestReport') {
+	dependsOn 'test'
+	reports {
+		xml.required = true
+		html.required = true
+	}
+	classDirectories.setFrom(files(classDirectories.files.collect {
+		fileTree(dir: it, exclude: coverageExclusions)
+	}))
+}
+
+tasks.named('jacocoTestCoverageVerification') {
+	dependsOn 'test'
+	classDirectories.setFrom(files(classDirectories.files.collect {
+		fileTree(dir: it, exclude: coverageExclusions)
+	}))
+	violationRules {
+		rule {
+			limit {
+				counter = 'LINE'
+				minimum = 0.80
+			}
+		}
+	}
+}
+
+tasks.named('check') {
+	dependsOn 'jacocoTestCoverageVerification'
+}
