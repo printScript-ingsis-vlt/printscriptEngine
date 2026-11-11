@@ -23,6 +23,10 @@ kotlin {
 	}
 }
 
+// Spring Boot 3.5.7 trae Testcontainers 1.21.3, que usa la API 1.32 de Docker y Docker 29 la rechaza
+// ("client version 1.32 is too old"). 1.21.4 negocia la version de la API.
+ext['testcontainers.version'] = '1.21.4'
+
 repositories {
 	mavenCentral()
 	maven {
@@ -41,11 +45,17 @@ dependencies {
 	testImplementation 'org.springframework.boot:spring-boot-starter-test'
 	implementation 'org.springframework.boot:spring-boot-starter-validation'
 	implementation 'org.springframework.boot:spring-boot-starter-actuator'
+	// Redis Streams: pedidos de lint/format desde snippet-service y respuestas hacia el.
+	implementation 'org.springframework.boot:spring-boot-starter-data-redis'
 
 	// Kotlin
 	implementation 'com.fasterxml.jackson.module:jackson-module-kotlin'
 	implementation 'org.jetbrains.kotlin:kotlin-reflect'
 	testImplementation 'org.jetbrains.kotlin:kotlin-test-junit5'
+	// Redis real en los tests de integracion de los streams (necesita Docker).
+	testImplementation 'org.springframework.boot:spring-boot-testcontainers'
+	testImplementation 'org.testcontainers:junit-jupiter'
+	testImplementation 'org.awaitility:awaitility-kotlin'
 
 	// Tu lenguaje
 	implementation 'com.printscript:common-ast:1.2.1'

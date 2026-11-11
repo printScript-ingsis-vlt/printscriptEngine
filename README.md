@@ -6,11 +6,16 @@ lenguaje en las librerías de PrintScript (`com.printscript:*`, publicadas en Gi
 
 No maneja permisos ni metadata: eso lo resuelve snippet-service antes de llamarlo.
 
+Además de la API HTTP, consume por **Redis Streams** los pedidos de lint y format que publica
+snippet-service cuando un usuario cambia sus reglas, y le responde por otro stream (ver
+[Redis Streams](#redis-streams)).
+
 ## Stack
 
 - Kotlin 2.2 + Spring Boot 3.5 (Java 21)
 - Librerías de PrintScript 1.2.0 (lexer, parser, semantic, interpreter, linter, formatter)
-- Tests: JUnit 5, MockMvc, JaCoCo (mínimo 80 % de líneas) y detekt
+- Spring Data Redis (Redis Streams) para los pedidos asíncronos de lint/format
+- Tests: JUnit 5, MockMvc, Testcontainers (Redis), JaCoCo (mínimo 80 % de líneas) y detekt
 
 ## Endpoints
 
@@ -104,11 +109,58 @@ curl -X POST -H 'Content-Type: application/json' \
 | Variable / property | Default | Para qué |
 |---|---|---|
 | `ASSET_SERVICE_URL` (`asset.url`) | `http://localhost:8081` | URL del Asset Service |
-| `ASSET_CONTAINER` (`asset.container`) | `snippets` | Container donde viven snippets y reglas |
+| `ASSET_SERVICE_CONTAINER` o `ASSET_CONTAINER` (`asset.container`) | `snippets` | Container donde viven snippets y reglas |
 | `asset.connect-timeout` / `asset.read-timeout` | `2s` / `10s` | Pasado eso, responde 503 |
 
 Un 404 del Asset Service se devuelve como `FILE_NOT_FOUND`. Cualquier otro error (5xx, conexión rechazada o
 timeout) se devuelve como `STORAGE_UNAVAILABLE`. Las keys no pueden tener `/`.
+
+## Redis Streams
+
+Cuando un usuario cambia sus reglas, snippet-service publica un pedido por cada snippet. El engine lo
+procesa con la misma lógica que `/lint` y `/format` y publica la respuesta:
+
+```text
+snippet-service ──XADD──▶ lint-requests / format-requests ──▶ engine (grupo printscript-engine)
+snippet-service ◀──────── lint-results  / format-results  ◀──XADD── engine
+```
+
+- **Contrato v1:** los mensajes son mapas planos `string → string`. Hay ejemplos y reglas en
+  [`src/test/resources/contracts/`](src/test/resources/contracts/README.md); el mismo contrato tiene que
+  estar en snippet-service.
+- **Lint** responde `COMPLIANT` (sin issues), `NOT_COMPLIANT` (con issues, que van en `issues`) o `FAILED`
+  (no compila, reglas inválidas, versión no soportada o snippet borrado).
+- **Format** responde `FORMATTED` con el código en `formatted`, o `FAILED`. En este flujo el engine no
+  escribe en el Asset Service: el formateado lo guarda snippet-service.
+- **Ack manual:** se hace ack solo después de publicar la respuesta. Si el Asset Service está caído, el
+  pedido queda pendiente y `PendingReclaimer` lo reintenta. Después de `streams.max-deliveries` entregas
+  va a `{stream}-dlq` con un `reason`, y se responde `FAILED` para que el snippet no quede en `pending`.
+  Si una respuesta sale dos veces, snippet-service la descarta por `requestId`.
+- Redis no afecta a `/actuator/health`: si se cae, la API HTTP sigue funcionando y los listeners se
+  reconectan solos.
+
+| Variable / property | Default | Para qué |
+|---|---|---|
+| `REDIS_HOST` / `REDIS_PORT` | `localhost` / `6379` | En el Swarm es `redis:6379` |
+| `spring.data.redis.password` | sin password | En el Swarm llega como Docker Secret (configtree) |
+| `STREAMS_ENABLED` (`streams.enabled`) | `true` | `false` apaga listeners y reclaimer |
+| `HOSTNAME` (`streams.consumer`) | `printscript-engine-local` | Nombre del consumer, único por réplica |
+| `streams.max-deliveries` | `3` | Entregas antes de mandar el pedido a la DLQ |
+| `streams.reclaim-idle` / `streams.reclaim-interval` | `60s` / `PT30S` | Cuándo un pedido sin ack se reintenta y cada cuánto se revisa |
+| `streams.max-length` | `10000` | `MAXLEN ~` de los streams que escribe el engine |
+
+Para probarlo a mano con el compose levantado:
+
+```bash
+curl -X PUT --data-binary 'let mi_variable: number = 5;' http://localhost:8081/v1/asset/snippets/s1
+curl -X PUT --data-binary '{"identifier-format":"camel-case"}' http://localhost:8081/v1/asset/snippets/rules.u1.lint
+docker compose exec redis redis-cli XADD lint-requests '*' schemaVersion 1 requestId r1 snippetId s1 \
+  rulesKey rules.u1.lint language printscript version 1.1
+docker compose exec redis redis-cli XRANGE lint-results - +
+```
+
+Los tests de integración (`RedisStreamsIntegrationTest`) levantan un Redis real con Testcontainers, así
+que necesitan Docker corriendo.
 
 ## Estructura
 
@@ -117,6 +169,7 @@ src/main/kotlin/com/printscript/
 ├── controller/   endpoints REST, requests y manejo de errores
 ├── service/      orquesta: lee del bucket y llama al engine
 ├── domain/       engine de PrintScript, resultados, excepciones e interfaces
+├── messaging/    Redis Streams: pedidos de lint/format, respuestas, reintentos y DLQ
 └── repository/   FileRepository: acceso al bucket
 ```
 

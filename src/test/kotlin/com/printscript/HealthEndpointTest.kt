@@ -12,7 +12,7 @@ import org.springframework.test.web.servlet.result.MockMvcResultMatchers.content
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.status
 
-@SpringBootTest
+@SpringBootTest(properties = ["streams.enabled=false"]) // sin Redis: solo la API HTTP
 @AutoConfigureMockMvc
 class HealthEndpointTest {
 
