@@ -2,6 +2,7 @@ package com.printscript.service
 
 import com.printscript.domain.interfaces.PrintScriptEngine
 import com.printscript.domain.result.FormatOperationResult
+import com.printscript.domain.result.FormatResult
 import com.printscript.domain.result.InterpretResult
 import com.printscript.domain.result.LintResult
 import com.printscript.domain.result.ValidationResult
@@ -35,7 +36,7 @@ class SnippetOperationService(
      * la original se puede seguir descargando y no hay carrera con las ediciones del usuario.
      */
     fun format(snippetKey: String, rulesKey: String?, version: String): FormatOperationResult {
-        val result = engine.format(files.get(snippetKey), version, loadRules(rulesKey))
+        val result = formatContent(snippetKey, rulesKey, version)
         val formatted = result.formatted
             ?: return FormatOperationResult(snippetKey, null, result.errors)
 
@@ -43,6 +44,13 @@ class SnippetOperationService(
         files.put(formattedKey, formatted)
         return FormatOperationResult(snippetKey, formattedKey, result.errors)
     }
+
+    /**
+     * Formatea sin guardar nada: devuelve el codigo formateado. Lo usa el flujo por Redis,
+     * donde quien persiste el resultado es snippet-service.
+     */
+    fun formatContent(snippetKey: String, rulesKey: String?, version: String): FormatResult =
+        engine.format(files.get(snippetKey), version, loadRules(rulesKey))
 
     fun validate(snippetKey: String, version: String): ValidationResult =
         engine.validate(files.get(snippetKey), version)

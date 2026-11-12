@@ -14,14 +14,31 @@ services:
       - "${ENGINE_HOST_PORT:-8080}:8080"
     environment:
       ASSET_SERVICE_URL: "http://asset_service:8080"
+      REDIS_HOST: "redis"
     depends_on:
       - asset_service
+      - redis
     healthcheck:
       test: ["CMD", "curl", "--fail", "--silent", "--show-error", "http://localhost:8080/actuator/health"]
       interval: 10s
       timeout: 5s
       retries: 5
       start_period: 30s
+
+  # Broker de los pedidos de lint/format (Redis Streams). Sin password en local.
+  # Para mirar los streams: docker compose exec redis redis-cli XRANGE lint-results - +
+  redis:
+    image: redis:7.4-alpine
+    command: ["redis-server", "--appendonly", "yes"]
+    ports:
+      - "${REDIS_HOST_PORT:-6379}:6379"
+    volumes:
+      - redis:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
 
   # Asset Service de la catedra: API HTTP (GET/PUT/DELETE /v1/asset/{container}/{key}) sobre el bucket.
   # Swagger en http://localhost:8081/swagger-ui
@@ -52,3 +69,4 @@ secrets:
 
 volumes:
   blob:
+  redis:

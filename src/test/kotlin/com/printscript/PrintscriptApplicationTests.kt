@@ -5,7 +5,7 @@ import org.junit.jupiter.api.Test
 import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.test.context.bean.override.mockito.MockitoBean
 
-@SpringBootTest
+@SpringBootTest(properties = ["streams.enabled=false"]) // sin Redis: solo la API HTTP
 class PrintscriptApplicationTests {
 
     // Se mockea FileRepository para levantar el contexto sin depender del Asset Service.

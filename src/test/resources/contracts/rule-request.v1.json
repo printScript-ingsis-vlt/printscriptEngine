@@ -1,0 +1,10 @@
+{
+  "schemaVersion": "1",
+  "requestId": "6f1c2a1e-0000-4000-8000-000000000001",
+  "snippetId": "a3f0c1d2-0000-4000-8000-000000000002",
+  "snippetKey": "a3f0c1d2-0000-4000-8000-000000000002",
+  "rulesKey": "rules.user-123.lint",
+  "language": "printscript",
+  "version": "1.1",
+  "requestedAt": "2026-11-11T12:00:00Z"
+}
