@@ -28,6 +28,7 @@ import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.status
+import java.time.Duration
 
 @WebMvcTest(SnippetOperationController::class)
 class SnippetOperationControllerTest {
@@ -154,14 +155,28 @@ class SnippetOperationControllerTest {
     }
 
     @Test
-    fun `test sin inputs ni outputs los manda como listas vacias`() {
+    fun `test sin inputs y con outputs vacios explicitos espera que no imprima nada`() {
         `when`(service.runTest("s", "1.0", emptyList(), emptyList()))
             .thenReturn(TestRunResult(true, 0, 0, 0, emptyList(), emptyList()))
 
-        postJson("/test", """{"snippetKey":"s","version":"1.0"}""")
+        postJson("/test", """{"snippetKey":"s","version":"1.0","expectedOutputs":[]}""")
             .andExpect(status().isOk)
             .andExpect(jsonPath("$.passed").value(true))
             .andExpect(jsonPath("$.lines").isEmpty)
+    }
+
+    @Test
+    fun `test sin expectedOutputs devuelve 400 en vez de un falso paso`() {
+        postJson("/test", """{"snippetKey":"s","version":"1.0","inputs":[]}""")
+            .andExpect(status().isBadRequest)
+            .andExpect(jsonPath("$.error").value("INVALID_REQUEST"))
+    }
+
+    @Test
+    fun `test con expectedOutputs mal escrito devuelve 400`() {
+        postJson("/test", """{"snippetKey":"s","version":"1.0","expectedOutput":["1"]}""")
+            .andExpect(status().isBadRequest)
+            .andExpect(jsonPath("$.error").value("INVALID_REQUEST"))
     }
 
     @Test
@@ -172,10 +187,26 @@ class SnippetOperationControllerTest {
     }
 
     @Test
+    fun `test con version en blanco devuelve 400`() {
+        postJson("/test", """{"snippetKey":"s","version":"  ","expectedOutputs":[]}""")
+            .andExpect(status().isBadRequest)
+            .andExpect(jsonPath("$.error").value("INVALID_REQUEST"))
+    }
+
+    @Test
+    fun `una version no soportada devuelve 4xx`() {
+        `when`(service.runTest("s", "9.9", emptyList(), emptyList())).thenThrow(UnsupportedVersionException("9.9"))
+
+        postJson("/test", """{"snippetKey":"s","version":"9.9","expectedOutputs":[]}""")
+            .andExpect(status().isBadRequest)
+            .andExpect(jsonPath("$.error").value("UNSUPPORTED_VERSION"))
+    }
+
+    @Test
     fun `test de un snippet inexistente devuelve 404`() {
         `when`(service.runTest("s", "1.0", emptyList(), emptyList())).thenThrow(StorageFileNotFoundException("s"))
 
-        postJson("/test", """{"snippetKey":"s","version":"1.0"}""")
+        postJson("/test", """{"snippetKey":"s","version":"1.0","expectedOutputs":[]}""")
             .andExpect(status().isNotFound)
             .andExpect(jsonPath("$.error").value("FILE_NOT_FOUND"))
     }
@@ -223,7 +254,7 @@ class SnippetOperationControllerTest {
 
     @Test
     fun `timeout de ejecucion devuelve 504`() =
-        expectError(ExecutionTimeoutException(10), 504, "EXECUTION_TIMEOUT")
+        expectError(ExecutionTimeoutException(Duration.ofSeconds(10)), 504, "EXECUTION_TIMEOUT")
 
     @Test
     fun `version no soportada devuelve 400`() =

@@ -3,6 +3,7 @@ package com.printscript.service
 import com.printscript.domain.DefaultPrintScriptEngine
 import com.printscript.domain.errors.ExecutionTimeoutException
 import com.printscript.domain.errors.StorageFileNotFoundException
+import com.printscript.domain.errors.UnsupportedVersionException
 import com.printscript.domain.interfaces.PrintScriptEngine
 import com.printscript.domain.result.InterpretResult
 import com.printscript.domain.result.LineStatus
@@ -11,6 +12,7 @@ import com.printscript.repository.FileRepository
 import org.junit.jupiter.api.Nested
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
+import java.time.Duration
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertNull
@@ -179,7 +181,7 @@ class SnippetOperationServiceTest {
         fun `un timeout es un test que no pasa, no una excepcion`() {
             val slowEngine = object : PrintScriptEngine by DefaultPrintScriptEngine() {
                 override fun interpret(code: String, version: String, inputs: List<String>?): InterpretResult =
-                    throw ExecutionTimeoutException(10)
+                    throw ExecutionTimeoutException(Duration.ofSeconds(10))
             }
             val service = SnippetOperationService(repo, slowEngine)
 
@@ -187,7 +189,25 @@ class SnippetOperationServiceTest {
 
             assertFalse(result.passed)
             assertEquals(OutputLineResult(0, "5", null, LineStatus.FAIL), result.lines.single())
-            assertTrue(result.errors.single().contains("10 segundos"))
+            assertTrue(result.errors.single().contains("10000 ms"), result.errors.toString())
+        }
+
+        @Test
+        fun `menos inputs de los que pide el snippet devuelve un test que no pasa con el motivo`() {
+            repo.files["dosInputs"] =
+                "let a: string = readInput(\"a\");\nlet b: string = readInput(\"b\");\nprintln(a);"
+
+            val result = service.runTest("dosInputs", "1.1", listOf("uno"), listOf("a", "b", "uno"))
+
+            // No se queda esperando: el segundo readInput falla enseguida y el test no pasa.
+            assertFalse(result.passed)
+            assertTrue(result.errors.any { it.contains("readInput sin entrada disponible") }, result.errors.toString())
+            assertEquals(listOf("a", "b"), result.lines.mapNotNull { it.actual })
+        }
+
+        @Test
+        fun `una version no soportada propaga UnsupportedVersionException`() {
+            assertThrows<UnsupportedVersionException> { service.runTest("snippet", "9.9", emptyList(), emptyList()) }
         }
 
         @Test
