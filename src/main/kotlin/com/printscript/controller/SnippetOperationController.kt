@@ -2,9 +2,11 @@ package com.printscript.controller
 
 import com.printscript.controller.request.InterpretRequest
 import com.printscript.controller.request.RulesOperationRequest
+import com.printscript.controller.request.RunTestRequest
 import com.printscript.domain.result.FormatOperationResult
 import com.printscript.domain.result.InterpretResult
 import com.printscript.domain.result.LintResult
+import com.printscript.domain.result.TestRunResult
 import com.printscript.domain.result.ValidationResult
 import com.printscript.service.SnippetOperationService
 import jakarta.validation.Valid
@@ -37,4 +39,14 @@ class SnippetOperationController(private val service: SnippetOperationService) {
     @PostMapping("/validate")
     fun validate(@Valid @RequestBody request: RulesOperationRequest): ValidationResult =
         service.validate(request.snippetKey!!, request.version!!)
+
+    /** Corre un test: un test que no pasa (o un snippet que falla al ejecutar) tambien es 200. */
+    @PostMapping("/test")
+    fun runTest(@Valid @RequestBody request: RunTestRequest): TestRunResult =
+        service.runTest(
+            request.snippetKey!!,
+            request.version!!,
+            request.inputs.orEmpty(),
+            request.expectedOutputs.orEmpty(),
+        )
 }

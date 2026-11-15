@@ -1,8 +1,14 @@
 package com.printscript.service
 
 import com.printscript.domain.DefaultPrintScriptEngine
+import com.printscript.domain.errors.ExecutionTimeoutException
 import com.printscript.domain.errors.StorageFileNotFoundException
+import com.printscript.domain.interfaces.PrintScriptEngine
+import com.printscript.domain.result.InterpretResult
+import com.printscript.domain.result.LineStatus
+import com.printscript.domain.result.OutputLineResult
 import com.printscript.repository.FileRepository
+import org.junit.jupiter.api.Nested
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
 import kotlin.test.assertEquals
@@ -124,5 +130,69 @@ class SnippetOperationServiceTest {
     @Test
     fun `si las reglas no existen propaga StorageFileNotFoundException`() {
         assertThrows<StorageFileNotFoundException> { service.lint("snippet", "no-existe", "1.0") }
+    }
+
+    @Nested
+    inner class RunTest {
+
+        @Test
+        fun `pasa si la salida coincide con la esperada`() {
+            val result = service.runTest("snippet", "1.0", emptyList(), listOf("5"))
+
+            assertTrue(result.passed)
+            assertEquals(listOf(OutputLineResult(0, "5", "5", LineStatus.PASS)), result.lines)
+            assertEquals(listOf("snippet"), repo.reads)
+            assertTrue(repo.writes.isEmpty())
+        }
+
+        @Test
+        fun `un test invalido no pasa y marca la linea que no coincide`() {
+            val result = service.runTest("snippet", "1.0", emptyList(), listOf("6"))
+
+            assertFalse(result.passed)
+            assertEquals(OutputLineResult(0, "6", "5", LineStatus.FAIL), result.lines.single())
+        }
+
+        @Test
+        fun `los inputs se consumen en el orden en que se piden`() {
+            repo.files["conInputs"] =
+                "let a: string = readInput(\"a\");\nlet b: string = readInput(\"b\");\nprintln(a);\nprintln(b);"
+
+            // El interprete escribe el prompt de readInput en la misma salida que println,
+            // asi que hoy los outputs esperados tienen que incluir "a" y "b".
+            val result = service.runTest("conInputs", "1.1", listOf("uno", "dos"), listOf("a", "b", "uno", "dos"))
+
+            assertTrue(result.passed, result.toString())
+        }
+
+        @Test
+        fun `un error de ejecucion no pasa y devuelve el motivo`() {
+            repo.files["roto"] = "let x: number = ;"
+
+            val result = service.runTest("roto", "1.0", emptyList(), emptyList())
+
+            assertFalse(result.passed)
+            assertTrue(result.errors.isNotEmpty())
+        }
+
+        @Test
+        fun `un timeout es un test que no pasa, no una excepcion`() {
+            val slowEngine = object : PrintScriptEngine by DefaultPrintScriptEngine() {
+                override fun interpret(code: String, version: String, inputs: List<String>?): InterpretResult =
+                    throw ExecutionTimeoutException(10)
+            }
+            val service = SnippetOperationService(repo, slowEngine)
+
+            val result = service.runTest("snippet", "1.0", emptyList(), listOf("5"))
+
+            assertFalse(result.passed)
+            assertEquals(OutputLineResult(0, "5", null, LineStatus.FAIL), result.lines.single())
+            assertTrue(result.errors.single().contains("10 segundos"))
+        }
+
+        @Test
+        fun `si el snippet no existe propaga StorageFileNotFoundException`() {
+            assertThrows<StorageFileNotFoundException> { service.runTest("no-existe", "1.0", emptyList(), emptyList()) }
+        }
     }
 }
