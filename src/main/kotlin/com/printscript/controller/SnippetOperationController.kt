@@ -47,6 +47,6 @@ class SnippetOperationController(private val service: SnippetOperationService) {
             request.snippetKey!!,
             request.version!!,
             request.inputs.orEmpty(),
-            request.expectedOutputs.orEmpty(),
+            request.expectedOutputs!!,
         )
 }
