@@ -17,3 +17,10 @@ data class RulesOperationRequest(
     val rulesKey: String?,
     @field:NotBlank val version: String?,
 )
+
+data class RunTestRequest(
+    @field:NotBlank val snippetKey: String?,
+    @field:NotBlank val version: String?,
+    val inputs: List<String>?,
+    val expectedOutputs: List<String>?,
+)

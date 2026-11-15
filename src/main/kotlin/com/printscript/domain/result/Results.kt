@@ -43,3 +43,10 @@ data class ValidationResult(val errors: List<ValidationError>) {
     val valid: Boolean
         get() = errors.isEmpty()
 }
+
+enum class LineStatus { PASS, FAIL }
+data class OutputLineResult(val index: Int, val expected: String?, val actual: String?, val status: LineStatus)
+data class TestRunResult(
+    val passed: Boolean, val total: Int, val passedCount: Int, val failedCount: Int,
+    val lines: List<OutputLineResult>, val errors: List<String>,
+)
