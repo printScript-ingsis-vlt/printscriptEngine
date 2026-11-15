@@ -1,5 +1,7 @@
 package com.printscript.domain.errors
 
+import java.time.Duration
+
 // no existe el archivo con esa key devuelvo 404
 class StorageFileNotFoundException(key: String, cause: Throwable? = null) :
     RuntimeException("No existe el archivo: $key", cause)
@@ -8,8 +10,8 @@ class StorageFileNotFoundException(key: String, cause: Throwable? = null) :
 class StorageUnavailableException(message: String, cause: Throwable?) : RuntimeException(message, cause)
 
 // ejecucion despues del tiempo permitido. El controller deberia mapearla a 408/504.
-class ExecutionTimeoutException(seconds: Long, cause: Throwable? = null) :
-    RuntimeException("La ejecucion supero el limite de $seconds segundos", cause)
+class ExecutionTimeoutException(limit: Duration, cause: Throwable? = null) :
+    RuntimeException("La ejecucion supero el limite de ${limit.toMillis()} ms", cause)
 
 // El JSON de reglas de lint es invalido (mal formado o con valores que no corresponden). 400.
 class InvalidLintConfigException(message: String, cause: Throwable? = null) : RuntimeException(message, cause)
