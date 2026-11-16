@@ -1,11 +1,13 @@
 package com.printscript.domain
 
+import com.printscript.domain.errors.ExecutionTimeoutException
 import com.printscript.domain.errors.InvalidFormatConfigException
 import com.printscript.domain.errors.InvalidLintConfigException
 import com.printscript.domain.errors.UnsupportedVersionException
 import org.junit.jupiter.api.Nested
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
+import java.time.Duration
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
@@ -81,6 +83,16 @@ class DefaultPrintScriptEngineTest {
         @Test
         fun `una version no soportada lanza UnsupportedVersionException`() {
             assertThrows<UnsupportedVersionException> { engine.interpret("println(1);", "9.9", null) }
+        }
+
+        @Test
+        fun `el limite de tiempo sale de la configuracion`() {
+            val impatient = DefaultPrintScriptEngine(executionTimeout = Duration.ofMillis(1))
+            val code = "println(1);\n".repeat(9_999)
+
+            val error = assertThrows<ExecutionTimeoutException> { impatient.interpret(code, "1.0", null) }
+
+            assertTrue(error.message!!.contains("1 ms"), error.message)
         }
 
         @Test
