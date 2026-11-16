@@ -15,6 +15,7 @@ import org.junit.jupiter.api.assertThrows
 import java.time.Duration
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
@@ -114,19 +115,66 @@ class SnippetOperationServiceTest {
     fun `validate acepta cualquier key, como un draft`() {
         repo.files["snippet.draft"] = "let x: number = ;"
 
-        assertFalse(service.validate("snippet.draft", "1.0").valid)
+        assertFalse(service.validate("snippet.draft", null, "1.0").valid)
         assertEquals(listOf("snippet.draft"), repo.reads)
         assertTrue(repo.writes.isEmpty())
     }
 
     @Test
     fun `validate lee el snippet y lo valida`() {
-        assertTrue(service.validate("snippet", "1.0").valid)
+        assertTrue(service.validate("snippet", null, "1.0").valid)
     }
 
     @Test
     fun `si el snippet no existe propaga StorageFileNotFoundException`() {
-        assertThrows<StorageFileNotFoundException> { service.validate("no-existe", "1.0") }
+        assertThrows<StorageFileNotFoundException> { service.validate("no-existe", null, "1.0") }
+    }
+
+    @Test
+    fun `validate con content valido no toca el Asset Service`() {
+        assertTrue(service.validate(null, "let x: number = 5;", "1.0").valid)
+
+        assertTrue(repo.reads.isEmpty())
+        assertTrue(repo.writes.isEmpty())
+    }
+
+    @Test
+    fun `validate con content invalido trae la regla, la linea y la columna`() {
+        val result = service.validate(null, "let x: number = 5;\nlet y: number = ;", "1.0")
+
+        assertFalse(result.valid)
+        val error = result.errors.single()
+        assertEquals("syntax", error.rule)
+        assertEquals(2, error.line)
+        assertNotNull(error.column)
+        assertTrue(repo.reads.isEmpty())
+    }
+
+    @Test
+    fun `validate con content vacio no es lo mismo que no mandarlo`() {
+        service.validate(null, "", "1.0")
+
+        assertTrue(repo.reads.isEmpty())
+    }
+
+    @Test
+    fun `validate con un snippetKey en blanco y content usa el content`() {
+        assertTrue(service.validate("  ", "let x: number = 5;", "1.0").valid)
+
+        assertTrue(repo.reads.isEmpty())
+    }
+
+    @Test
+    fun `validate exige uno solo de snippetKey y content`() {
+        assertThrows<IllegalArgumentException> { service.validate("snippet", "let x: number = 5;", "1.0") }
+        assertThrows<IllegalArgumentException> { service.validate(null, null, "1.0") }
+        assertThrows<IllegalArgumentException> { service.validate("  ", null, "1.0") }
+        assertTrue(repo.reads.isEmpty())
+    }
+
+    @Test
+    fun `validate con content y una version no soportada es UnsupportedVersionException`() {
+        assertThrows<UnsupportedVersionException> { service.validate(null, "let x: number = 5;", "9.9") }
     }
 
     @Test
