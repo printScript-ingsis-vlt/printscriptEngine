@@ -28,6 +28,7 @@ import linter.config.LintConfig
 import org.json.JSONException
 import org.json.JSONObject
 import org.json.JSONTokener
+ import org.springframework.beans.factory.annotation.Value
 import org.springframework.stereotype.Component
 import parser.streamRules.StreamGrammarConfigurations
 import pipeline.PipelineResult
@@ -41,6 +42,7 @@ import semantic.SemanticAnalyzer
 import semantic.SemanticConfigurations
 import token.Token
 import java.io.StringReader
+import java.time.Duration
 import java.util.concurrent.ExecutionException
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
@@ -48,11 +50,14 @@ import java.util.concurrent.TimeUnit
 import java.util.concurrent.TimeoutException
 
 // aca guardo toda la logica del lenguaje
+// executionTimeout: cuanto puede tardar un interpret antes de cortarlo (engine.execution-timeout).
 @Component
-class DefaultPrintScriptEngine : PrintScriptEngine {
+class DefaultPrintScriptEngine(
+    @Value("\${engine.execution-timeout:10s}") private val executionTimeout: Duration = DEFAULT_TIMEOUT,
+) : PrintScriptEngine {
 
     private companion object {
-        const val TIMEOUT_SECONDS = 10L
+        val DEFAULT_TIMEOUT: Duration = Duration.ofSeconds(10)
         const val MAX_OUTPUT_LINES = 10_000
     }
 
@@ -67,10 +72,10 @@ class DefaultPrintScriptEngine : PrintScriptEngine {
         val psVersion = parseVersion(version)
         val future = executor.submit<InterpretResult> { runInterpreter(code, psVersion, inputs) }
         try {
-            return future.get(TIMEOUT_SECONDS, TimeUnit.SECONDS)
+            return future.get(executionTimeout.toMillis(), TimeUnit.MILLISECONDS)
         } catch (e: TimeoutException) {
             future.cancel(true)
-            throw ExecutionTimeoutException(TIMEOUT_SECONDS, e)
+            throw ExecutionTimeoutException(executionTimeout, e)
         } catch (e: InterruptedException) {
             future.cancel(true)
             Thread.currentThread().interrupt()
