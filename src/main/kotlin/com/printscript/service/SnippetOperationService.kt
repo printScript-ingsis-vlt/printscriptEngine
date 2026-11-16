@@ -58,8 +58,18 @@ class SnippetOperationService(
     fun formatContent(snippetKey: String, rulesKey: String?, version: String): FormatResult =
         engine.format(files.get(snippetKey), version, loadRules(rulesKey))
 
-    fun validate(snippetKey: String, version: String): ValidationResult =
-        engine.validate(files.get(snippetKey), version)
+    /**
+     * Valida codigo que puede venir de dos lados, y tiene que ser exactamente uno:
+     * - [content]: el texto directo. No toca el Asset Service, asi que sirve para validar antes de guardar.
+     * - [snippetKey]: un snippet ya guardado, que se lee del Asset Service.
+     * Mandar los dos o ninguno es IllegalArgumentException (400). Un snippetKey en blanco cuenta como ausente.
+     */
+    fun validate(snippetKey: String?, content: String?, version: String): ValidationResult {
+        val hasKey = !snippetKey.isNullOrBlank()
+        require(hasKey != (content != null)) { "Mandar snippetKey o content, uno solo de los dos" }
+        val code = content ?: files.get(snippetKey!!)
+        return engine.validate(code, version)
+    }
 
     /**
      * Corre un test: ejecuta el snippet con [inputs] (en orden) y compara cada println contra [expectedOutputs].
