@@ -2,6 +2,8 @@ package com.printscript.service
 
 import com.printscript.domain.OutputComparator
 import com.printscript.domain.errors.ExecutionTimeoutException
+import com.printscript.domain.interactive.ExecutionHandle
+import com.printscript.domain.interactive.ExecutionListener
 import com.printscript.domain.interfaces.PrintScriptEngine
 import com.printscript.domain.result.FormatOperationResult
 import com.printscript.domain.result.FormatResult
@@ -33,6 +35,13 @@ class SnippetOperationService(
 
     fun interpret(snippetKey: String, version: String, inputs: List<String>?): InterpretResult =
         engine.interpret(files.get(snippetKey), version, inputs)
+
+    /**
+     * Arranca una ejecucion interactiva del snippet guardado. El codigo se lee antes de arrancar, asi que un
+     * snippet inexistente o el storage caido salen como excepcion aca y no como evento del listener.
+     */
+    fun startExecution(snippetKey: String, version: String, listener: ExecutionListener): ExecutionHandle =
+        engine.interpretInteractive(files.get(snippetKey), version, listener)
 
     fun lint(snippetKey: String, rulesKey: String?, version: String): LintResult =
         engine.lint(files.get(snippetKey), version, loadRules(rulesKey))

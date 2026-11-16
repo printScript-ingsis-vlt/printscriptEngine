@@ -6,6 +6,9 @@ import com.printscript.domain.errors.ExecutionTimeoutException
 import com.printscript.domain.errors.InvalidFormatConfigException
 import com.printscript.domain.errors.InvalidLintConfigException
 import com.printscript.domain.errors.UnsupportedVersionException
+import com.printscript.domain.interactive.ExecutionHandle
+import com.printscript.domain.interactive.ExecutionListener
+import com.printscript.domain.interactive.InteractiveExecution
 import com.printscript.domain.interfaces.PrintScriptEngine
 import com.printscript.domain.result.FormatResult
 import com.printscript.domain.result.InterpretResult
@@ -46,24 +49,33 @@ import java.time.Duration
 import java.util.concurrent.ExecutionException
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
+import java.util.concurrent.ScheduledExecutorService
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.TimeoutException
 
 // aca guardo toda la logica del lenguaje
 // executionTimeout: cuanto puede tardar un interpret antes de cortarlo (engine.execution-timeout).
+// inputTimeout: en una ejecucion interactiva, cuanto se espera cada input (engine.input-timeout).
 @Component
 class DefaultPrintScriptEngine(
     @Value("\${engine.execution-timeout:10s}") private val executionTimeout: Duration = DEFAULT_TIMEOUT,
+    @Value("\${engine.input-timeout:5m}") private val inputTimeout: Duration = DEFAULT_INPUT_TIMEOUT,
 ) : PrintScriptEngine {
 
     private companion object {
         val DEFAULT_TIMEOUT: Duration = Duration.ofSeconds(10)
+        val DEFAULT_INPUT_TIMEOUT: Duration = Duration.ofMinutes(5)
         const val MAX_OUTPUT_LINES = 10_000
     }
 
     // Hilos daemon: si una ejecucion no responde al interrupt, no bloquea el apagado del servicio.
     private val executor: ExecutorService = Executors.newCachedThreadPool { runnable ->
         Thread(runnable, "printscript-run").apply { isDaemon = true }
+    }
+
+    // Controla el timeout de las ejecuciones interactivas (que no pueden usar future.get con limite).
+    private val watchdog: ScheduledExecutorService = Executors.newSingleThreadScheduledExecutor { runnable ->
+        Thread(runnable, "printscript-watchdog").apply { isDaemon = true }
     }
 
     // ---------------------------------------------------------------- interpret
@@ -87,27 +99,50 @@ class DefaultPrintScriptEngine(
 
     private fun runInterpreter(code: String, version: PrintScriptVersion, inputs: List<String>?): InterpretResult {
         val output = mutableListOf<String>()
-        val errors = mutableListOf<String>()
         val inputIterator = (inputs ?: emptyList()).iterator()
 
-        try {
-            // Output y ScriptInputProvider son interfaces Kotlin comunes (no "fun interface"),
-            // por eso se implementan con object en vez de lambda.
-            val out = object : Output {
-                override fun write(text: String) {
-                    check(output.size < MAX_OUTPUT_LINES) {
-                        "Se supero el maximo de $MAX_OUTPUT_LINES lineas de salida"
-                    }
-                    output.add(text)
+        // Output y ScriptInputProvider son interfaces Kotlin comunes (no "fun interface"),
+        // por eso se implementan con object en vez de lambda.
+        val out = object : Output {
+            override fun write(text: String) {
+                check(output.size < MAX_OUTPUT_LINES) {
+                    "Se supero el maximo de $MAX_OUTPUT_LINES lineas de salida"
                 }
+                output.add(text)
             }
-            val input = object : ScriptInputProvider {
-                override fun readLine(): String {
-                    check(inputIterator.hasNext()) { "readInput sin entrada disponible" }
-                    return inputIterator.next()
-                }
+        }
+        val input = object : ScriptInputProvider {
+            override fun readLine(): String {
+                check(inputIterator.hasNext()) { "readInput sin entrada disponible" }
+                return inputIterator.next()
             }
+        }
+        val errors = runPipeline(code, version, out, input)
+        return InterpretResult(output, errors)
+    }
 
+    // ---------------------------------------------------- interpret interactivo
+
+    /**
+     * Mismo pipeline que [interpret], pero el output va saliendo por [listener] y los inputs llegan de a uno.
+     * El timeout descuenta el tiempo esperando input (ver [InteractiveExecution]).
+     */
+    override fun interpretInteractive(code: String, version: String, listener: ExecutionListener): ExecutionHandle {
+        val psVersion = parseVersion(version)
+        val execution = InteractiveExecution(listener, executionTimeout, inputTimeout, MAX_OUTPUT_LINES)
+        execution.start(executor, watchdog) { out, input -> runPipeline(code, psVersion, out, input) }
+        return execution
+    }
+
+    /** Corre lexer, parser, semantico e interprete. Devuelve los errores; el output sale por [out]. */
+    private fun runPipeline(
+        code: String,
+        version: PrintScriptVersion,
+        out: Output,
+        input: ScriptInputProvider,
+    ): List<String> {
+        val errors = mutableListOf<String>()
+        try {
             // Sin variables de entorno: SystemEnvProvider le expondria al programa del usuario las del
             // contenedor (DB_PASSWORD, tokens, etc.). Un readEnv devuelve error en vez de un secreto.
             val pipeline = StreamPipeline(version, out, input, MockEnvProvider(emptyMap()))
@@ -124,7 +159,7 @@ class DefaultPrintScriptEngine(
         ) {
             errors.add(messageOf(e))
         }
-        return InterpretResult(output, errors)
+        return errors
     }
 
     // -------------------------------------------------------------------- lint
