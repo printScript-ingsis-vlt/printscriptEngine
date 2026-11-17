@@ -15,6 +15,12 @@ interface PrintScriptEngine {
     fun interpret(code: String, version: String, inputs: List<String>?): InterpretResult
 
     /**
+     * Igual que [interpret] pero el output solo trae lo que imprime el programa (println): el prompt de
+     * readInput("...") no se incluye. Es lo que se compara contra los outputs esperados de un test.
+     */
+    fun interpretForTest(code: String, version: String, inputs: List<String>): InterpretResult
+
+    /**
      * Ejecuta en segundo plano: los outputs y los pedidos de input van llegando a [listener] y los inputs se
      * mandan con el handle. Una version invalida lanza UnsupportedVersionException antes de arrancar.
      */
