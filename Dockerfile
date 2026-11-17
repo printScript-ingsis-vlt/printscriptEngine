@@ -25,8 +25,16 @@ RUN groupadd --system app && useradd --system --gid app app
 RUN command -v curl >/dev/null || \
     (apt-get update && apt-get install -y --no-install-recommends curl && rm -rf /var/lib/apt/lists/*)
 
+# Agente APM de New Relic (versión fija). ADD desde una URL deja el archivo en 600;
+# --chmod=644 hace falta para que el usuario app pueda leerlo. La carpeta se crea
+# antes: si la crea ADD con --chmod, queda sin permiso de entrada para app.
+RUN mkdir -p /app/newrelic
+ADD --chmod=644 https://repo1.maven.org/maven2/com/newrelic/agent/java/newrelic-agent/9.5.0/newrelic-agent-9.5.0.jar /app/newrelic/newrelic.jar
+# Config del agente: la license key y el nombre llegan por variables de entorno.
+COPY --chmod=644 newrelic/newrelic.yml /app/newrelic/newrelic.yml
+
 COPY --from=build /src/build/libs/*.jar app.jar
 
 USER app
 EXPOSE 8080
-ENTRYPOINT ["java", "-XX:MaxRAMPercentage=75", "-jar", "/app/app.jar"]
+ENTRYPOINT ["java", "-javaagent:/app/newrelic/newrelic.jar", "-XX:MaxRAMPercentage=75", "-jar", "/app/app.jar"]

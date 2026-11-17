@@ -15,6 +15,8 @@ services:
     environment:
       ASSET_SERVICE_URL: "http://asset_service:8080"
       REDIS_HOST: "redis"
+      # En local el agente APM de New Relic queda apagado (no hay license key).
+      NEW_RELIC_AGENT_ENABLED: "false"
     depends_on:
       - asset_service
       - redis
