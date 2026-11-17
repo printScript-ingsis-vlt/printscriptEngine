@@ -21,7 +21,6 @@ import org.springframework.web.socket.handler.TextWebSocketHandler
 import java.util.concurrent.LinkedBlockingQueue
 import java.util.concurrent.TimeUnit
 import kotlin.test.assertEquals
-import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 import kotlin.test.fail
@@ -138,7 +137,9 @@ class ExecutionWebSocketHandlerTest {
         client.send("""{"type":"stop"}""")
 
         assertNotNull(client.closeStatus())
-        assertFalse(client.session.isOpen)
+        // afterConnectionClosed llega antes de que la sesion del cliente se marque cerrada: en una maquina
+        // lenta (CI) isOpen todavia puede dar true un instante, asi que se espera en vez de mirarlo una vez.
+        assertTrue(client.awaitSessionClosed(), "La sesion del cliente sigue abierta")
         client.assertNoMore()
     }
 
@@ -177,9 +178,20 @@ class ExecutionWebSocketHandlerTest {
 
         fun closeStatus(): CloseStatus? = closed.poll(5, TimeUnit.SECONDS)
 
+        /** true si la sesion queda cerrada dentro de [timeoutMs]. */
+        fun awaitSessionClosed(timeoutMs: Long = 5_000): Boolean {
+            val deadline = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(timeoutMs)
+            while (session.isOpen && System.nanoTime() < deadline) Thread.sleep(POLL_MS)
+            return !session.isOpen
+        }
+
         fun assertNoMore() {
             val extra = messages.poll(300, TimeUnit.MILLISECONDS)
             assertEquals(null, extra, "Llego un mensaje de mas")
+        }
+
+        private companion object {
+            const val POLL_MS = 20L
         }
     }
 }
