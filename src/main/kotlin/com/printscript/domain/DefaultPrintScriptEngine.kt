@@ -19,7 +19,10 @@ import com.printscript.domain.result.ValidationResult
 import formatter.FormatterConfigurations
 import formatter.FormattingRules
 import formatter.PrintScriptFormatter
+import interpreter.ConfigurableInterpreter
+import interpreter.InterpreterConfigurations
 import interpreter.Output
+import interpreter.handlers.expressions.ReadInputExpressionHandler
 import interpreter.ScriptInputProvider
 import interpreter.MockEnvProvider
 import lexer.LexerConfigurations
@@ -80,24 +83,25 @@ class DefaultPrintScriptEngine(
 
     // ---------------------------------------------------------------- interpret
 
-    override fun interpret(code: String, version: String, inputs: List<String>?): InterpretResult {
-        val psVersion = parseVersion(version)
-        val future = executor.submit<InterpretResult> { runInterpreter(code, psVersion, inputs) }
-        try {
-            return future.get(executionTimeout.toMillis(), TimeUnit.MILLISECONDS)
-        } catch (e: TimeoutException) {
-            future.cancel(true)
-            throw ExecutionTimeoutException(executionTimeout, e)
-        } catch (e: InterruptedException) {
-            future.cancel(true)
-            Thread.currentThread().interrupt()
-            throw IllegalStateException("Ejecucion interrumpida", e)
-        } catch (e: ExecutionException) {
-            throw IllegalStateException("Fallo inesperado al ejecutar", e)
-        }
-    }
+    override fun interpret(code: String, version: String, inputs: List<String>?): InterpretResult =
+        runWithTimeout(code, version, inputs, echoPrompts = true)
 
-    private fun runInterpreter(code: String, version: PrintScriptVersion, inputs: List<String>?): InterpretResult {
+    override fun interpretForTest(code: String, version: String, inputs: List<String>): InterpretResult =
+        runWithTimeout(code, version, inputs, echoPrompts = false)
+
+    /**
+     * Corre el programa en el executor con [executionTimeout]. Cada forma de terminar del Future
+     * (timeout, interrupcion, fallo) se traduce a su excepcion.
+     * Con [echoPrompts] en false, el prompt de readInput no se escribe en el output.
+     */
+    @Suppress("ThrowsCount")
+    private fun runWithTimeout(
+        code: String,
+        version: String,
+        inputs: List<String>?,
+        echoPrompts: Boolean,
+    ): InterpretResult {
+        val psVersion = parseVersion(version)
         val output = mutableListOf<String>()
         val inputIterator = (inputs ?: emptyList()).iterator()
 
@@ -117,8 +121,59 @@ class DefaultPrintScriptEngine(
                 return inputIterator.next()
             }
         }
-        val errors = runPipeline(code, version, out, input)
-        return InterpretResult(output, errors)
+        val future = executor.submit<InterpretResult> {
+            val errors = if (echoPrompts) {
+                runPipeline(code, psVersion, out, input)
+            } else {
+                runSilentPrompts(code, psVersion, out, input)
+            }
+            InterpretResult(output, errors)
+        }
+        try {
+            return future.get(executionTimeout.toMillis(), TimeUnit.MILLISECONDS)
+        } catch (e: TimeoutException) {
+            future.cancel(true)
+            throw ExecutionTimeoutException(executionTimeout, e)
+        } catch (e: InterruptedException) {
+            future.cancel(true)
+            Thread.currentThread().interrupt()
+            throw IllegalStateException("Ejecucion interrumpida", e)
+        } catch (e: ExecutionException) {
+            throw IllegalStateException("Fallo inesperado al ejecutar", e)
+        }
+    }
+
+    /**
+     * Como [runPipeline], pero readInput no escribe su prompt en [out] (ver [SilentPromptReadInputHandler]).
+     * StreamPipeline no deja cambiar los handlers del interprete, por eso aca se arma a mano:
+     * se valida el programa entero (lexer + parser + semantico) y despues se ejecuta.
+     */
+    private fun runSilentPrompts(
+        code: String,
+        version: PrintScriptVersion,
+        out: Output,
+        input: ScriptInputProvider,
+    ): List<String> {
+        val validationErrors = mutableListOf<ValidationError>()
+        val parsed = parse(code, version, validationErrors, semanticCheck = true)
+            ?: return validationErrors.map { it.message }
+
+        val base = InterpreterConfigurations.getConfiguration(version)
+        val configuration = base.copy(
+            expressionHandlers = base.expressionHandlers.map {
+                if (it is ReadInputExpressionHandler) SilentPromptReadInputHandler(it) else it
+            },
+        )
+        return try {
+            // Sin variables de entorno, igual que runPipeline.
+            ConfigurableInterpreter(out, configuration, input, MockEnvProvider(emptyMap())).run(parsed.program)
+            emptyList()
+        } catch (
+            // Los errores de ejecucion del programa del usuario llegan como excepciones de cualquier tipo.
+            @Suppress("TooGenericExceptionCaught") e: Throwable,
+        ) {
+            listOf(messageOf(e))
+        }
     }
 
     // ---------------------------------------------------- interpret interactivo
