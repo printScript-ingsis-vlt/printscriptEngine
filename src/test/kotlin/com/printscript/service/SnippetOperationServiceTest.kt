@@ -208,11 +208,19 @@ class SnippetOperationServiceTest {
             repo.files["conInputs"] =
                 "let a: string = readInput(\"a\");\nlet b: string = readInput(\"b\");\nprintln(a);\nprintln(b);"
 
-            // El interprete escribe el prompt de readInput en la misma salida que println,
-            // asi que hoy los outputs esperados tienen que incluir "a" y "b".
-            val result = service.runTest("conInputs", "1.1", listOf("uno", "dos"), listOf("a", "b", "uno", "dos"))
+            val result = service.runTest("conInputs", "1.1", listOf("uno", "dos"), listOf("uno", "dos"))
 
             assertTrue(result.passed, result.toString())
+        }
+
+        @Test
+        fun `el prompt de readInput no cuenta como output del test`() {
+            repo.files["eco"] = "let name: string = readInput(\"Como te llamas? \");\nprintln(name);"
+
+            val result = service.runTest("eco", "1.1", listOf("Ada"), listOf("Ada"))
+
+            assertTrue(result.passed, result.toString())
+            assertEquals(listOf("Ada"), result.lines.mapNotNull { it.actual })
         }
 
         @Test
@@ -228,7 +236,7 @@ class SnippetOperationServiceTest {
         @Test
         fun `un timeout es un test que no pasa, no una excepcion`() {
             val slowEngine = object : PrintScriptEngine by DefaultPrintScriptEngine() {
-                override fun interpret(code: String, version: String, inputs: List<String>?): InterpretResult =
+                override fun interpretForTest(code: String, version: String, inputs: List<String>): InterpretResult =
                     throw ExecutionTimeoutException(Duration.ofSeconds(10))
             }
             val service = SnippetOperationService(repo, slowEngine)
@@ -245,12 +253,12 @@ class SnippetOperationServiceTest {
             repo.files["dosInputs"] =
                 "let a: string = readInput(\"a\");\nlet b: string = readInput(\"b\");\nprintln(a);"
 
-            val result = service.runTest("dosInputs", "1.1", listOf("uno"), listOf("a", "b", "uno"))
+            val result = service.runTest("dosInputs", "1.1", listOf("uno"), listOf("uno"))
 
             // No se queda esperando: el segundo readInput falla enseguida y el test no pasa.
             assertFalse(result.passed)
             assertTrue(result.errors.any { it.contains("readInput sin entrada disponible") }, result.errors.toString())
-            assertEquals(listOf("a", "b"), result.lines.mapNotNull { it.actual })
+            assertEquals(emptyList<String>(), result.lines.mapNotNull { it.actual })
         }
 
         @Test

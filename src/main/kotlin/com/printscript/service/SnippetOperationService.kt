@@ -85,8 +85,7 @@ class SnippetOperationService(
      * Que el codigo del usuario falle o tarde demasiado es un resultado del test (no pasa, con el motivo en
      * errors), no un error del servicio. Si el snippet no existe o el storage esta caido, propaga como el resto.
      *
-     * Ojo: el interprete escribe el prompt de readInput("...") en la misma salida que println, asi que los
-     * outputs esperados tienen que incluir esos prompts (un prompt vacio no escribe nada).
+     * Solo se compara lo que imprime el programa: el prompt de readInput("...") no cuenta como output.
      */
     fun runTest(
         snippetKey: String,
@@ -96,7 +95,7 @@ class SnippetOperationService(
     ): TestRunResult {
         val code = files.get(snippetKey)
         val execution = try {
-            engine.interpret(code, version, inputs)
+            engine.interpretForTest(code, version, inputs)
         } catch (e: ExecutionTimeoutException) {
             InterpretResult(output = emptyList(), errors = listOf(e.message.orEmpty()))
         }

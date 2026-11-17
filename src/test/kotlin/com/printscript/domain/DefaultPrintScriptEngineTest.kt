@@ -63,6 +63,28 @@ class DefaultPrintScriptEngineTest {
         }
 
         @Test
+        fun `interpret incluye el prompt de readInput pero interpretForTest no`() {
+            val code = "let name: string = readInput(\"Como te llamas? \");\nprintln(name);"
+
+            assertEquals(listOf("Como te llamas? ", "Ada"), engine.interpret(code, "1.1", listOf("Ada")).output)
+
+            val forTest = engine.interpretForTest(code, "1.1", listOf("Ada"))
+            assertTrue(forTest.success(), forTest.errors.toString())
+            assertEquals(listOf("Ada"), forTest.output)
+        }
+
+        @Test
+        fun `interpretForTest devuelve los errores de compilacion y de ejecucion`() {
+            assertFalse(engine.interpretForTest("let x: number = ;", "1.1", emptyList()).success())
+
+            val sinInput = engine.interpretForTest("let a: string = readInput(\"a\");", "1.1", emptyList())
+            assertTrue(
+                sinInput.errors.any { it.contains("readInput sin entrada disponible") },
+                sinInput.errors.toString(),
+            )
+        }
+
+        @Test
         fun `readInput sin inputs disponibles devuelve un error`() {
             val result = engine.interpret("let a: string = readInput(\"a\");", "1.1", null)
 
