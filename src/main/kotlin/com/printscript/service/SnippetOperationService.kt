@@ -2,6 +2,8 @@ package com.printscript.service
 
 import com.printscript.domain.OutputComparator
 import com.printscript.domain.errors.ExecutionTimeoutException
+import com.printscript.domain.interactive.ExecutionHandle
+import com.printscript.domain.interactive.ExecutionListener
 import com.printscript.domain.interfaces.PrintScriptEngine
 import com.printscript.domain.result.FormatOperationResult
 import com.printscript.domain.result.FormatResult
@@ -34,6 +36,13 @@ class SnippetOperationService(
     fun interpret(snippetKey: String, version: String, inputs: List<String>?): InterpretResult =
         engine.interpret(files.get(snippetKey), version, inputs)
 
+    /**
+     * Arranca una ejecucion interactiva del snippet guardado. El codigo se lee antes de arrancar, asi que un
+     * snippet inexistente o el storage caido salen como excepcion aca y no como evento del listener.
+     */
+    fun startExecution(snippetKey: String, version: String, listener: ExecutionListener): ExecutionHandle =
+        engine.interpretInteractive(files.get(snippetKey), version, listener)
+
     fun lint(snippetKey: String, rulesKey: String?, version: String): LintResult =
         engine.lint(files.get(snippetKey), version, loadRules(rulesKey))
 
@@ -58,8 +67,18 @@ class SnippetOperationService(
     fun formatContent(snippetKey: String, rulesKey: String?, version: String): FormatResult =
         engine.format(files.get(snippetKey), version, loadRules(rulesKey))
 
-    fun validate(snippetKey: String, version: String): ValidationResult =
-        engine.validate(files.get(snippetKey), version)
+    /**
+     * Valida codigo que puede venir de dos lados, y tiene que ser exactamente uno:
+     * - [content]: el texto directo. No toca el Asset Service, asi que sirve para validar antes de guardar.
+     * - [snippetKey]: un snippet ya guardado, que se lee del Asset Service.
+     * Mandar los dos o ninguno es IllegalArgumentException (400). Un snippetKey en blanco cuenta como ausente.
+     */
+    fun validate(snippetKey: String?, content: String?, version: String): ValidationResult {
+        val hasKey = !snippetKey.isNullOrBlank()
+        require(hasKey != (content != null)) { "Mandar snippetKey o content, uno solo de los dos" }
+        val code = content ?: files.get(snippetKey!!)
+        return engine.validate(code, version)
+    }
 
     /**
      * Corre un test: ejecuta el snippet con [inputs] (en orden) y compara cada println contra [expectedOutputs].

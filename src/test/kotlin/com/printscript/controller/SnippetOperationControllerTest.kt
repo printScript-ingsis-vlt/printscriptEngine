@@ -1,5 +1,6 @@
 package com.printscript.controller
 
+import com.printscript.controller.request.ValidateRequest
 import com.printscript.domain.errors.ExecutionTimeoutException
 import com.printscript.domain.errors.InvalidFormatConfigException
 import com.printscript.domain.errors.InvalidLintConfigException
@@ -103,7 +104,7 @@ class SnippetOperationControllerTest {
 
     @Test
     fun `validate devuelve valid y los errores con regla y posicion`() {
-        `when`(service.validate("s", "1.0"))
+        `when`(service.validate("s", null, "1.0"))
             .thenReturn(ValidationResult(listOf(ValidationError("syntax", "mal", 3, 12))))
 
         postJson("/validate", rulesBody)
@@ -117,12 +118,59 @@ class SnippetOperationControllerTest {
 
     @Test
     fun `validate sin errores devuelve valid true`() {
-        `when`(service.validate("s", "1.0")).thenReturn(ValidationResult(emptyList()))
+        `when`(service.validate("s", null, "1.0")).thenReturn(ValidationResult(emptyList()))
 
         postJson("/validate", rulesBody)
             .andExpect(status().isOk)
             .andExpect(jsonPath("$.valid").value(true))
             .andExpect(jsonPath("$.errors").isEmpty)
+    }
+
+    @Test
+    fun `validate con content lo valida sin snippetKey`() {
+        `when`(service.validate(null, "let x: number = ;", "1.0"))
+            .thenReturn(ValidationResult(listOf(ValidationError("syntax", "mal", 1, 17))))
+
+        postJson("/validate", """{"content":"let x: number = ;","version":"1.0"}""")
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.valid").value(false))
+            .andExpect(jsonPath("$.errors[0].line").value(1))
+            .andExpect(jsonPath("$.errors[0].column").value(17))
+    }
+
+    @Test
+    fun `validate con content vacio llega al servicio como string vacio, no como ausente`() {
+        `when`(service.validate(null, "", "1.0")).thenReturn(ValidationResult(emptyList()))
+
+        postJson("/validate", """{"content":"","version":"1.0"}""")
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.valid").value(true))
+    }
+
+    @Test
+    fun `validate sin version devuelve 400`() {
+        postJson("/validate", """{"content":"let x: number = 5;"}""")
+            .andExpect(status().isBadRequest)
+            .andExpect(jsonPath("$.error").value("INVALID_REQUEST"))
+    }
+
+    @Test
+    fun `validate con un content mas largo que el maximo devuelve 400`() {
+        val tooLong = "a".repeat(ValidateRequest.MAX_CONTENT_LENGTH + 1)
+
+        postJson("/validate", """{"content":"$tooLong","version":"1.0"}""")
+            .andExpect(status().isBadRequest)
+            .andExpect(jsonPath("$.error").value("INVALID_REQUEST"))
+    }
+
+    @Test
+    fun `si el servicio rechaza snippetKey y content a la vez, devuelve 400`() {
+        `when`(service.validate("s", "let x: number = 5;", "1.0"))
+            .thenThrow(IllegalArgumentException("Mandar snippetKey o content, uno solo de los dos"))
+
+        postJson("/validate", """{"snippetKey":"s","content":"let x: number = 5;","version":"1.0"}""")
+            .andExpect(status().isBadRequest)
+            .andExpect(jsonPath("$.error").value("INVALID_REQUEST"))
     }
 
     // ------------------------------------------------------------------ tests
@@ -237,7 +285,7 @@ class SnippetOperationControllerTest {
     // ------------------------------------------------- errores del servicio
 
     private fun expectError(exception: RuntimeException, httpStatus: Int, code: String) {
-        `when`(service.validate("s", "1.0")).thenThrow(exception)
+        `when`(service.validate("s", null, "1.0")).thenThrow(exception)
 
         postJson("/validate", rulesBody)
             .andExpect(status().`is`(httpStatus))
@@ -288,7 +336,7 @@ class SnippetOperationControllerTest {
 
     @Test
     fun `un error inesperado devuelve 500 sin detalles internos`() {
-        `when`(service.validate("s", "1.0")).thenThrow(IllegalStateException("secreto"))
+        `when`(service.validate("s", null, "1.0")).thenThrow(IllegalStateException("secreto"))
 
         postJson("/validate", rulesBody)
             .andExpect(status().isInternalServerError)

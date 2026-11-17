@@ -13,6 +13,10 @@ class StorageUnavailableException(message: String, cause: Throwable?) : RuntimeE
 class ExecutionTimeoutException(limit: Duration, cause: Throwable? = null) :
     RuntimeException("La ejecucion supero el limite de ${limit.toMillis()} ms", cause)
 
+// En una ejecucion interactiva, el programa espero un input mas de lo permitido. Es un error del resultado, no HTTP.
+class InputTimeoutException(limit: Duration) :
+    RuntimeException("No llego ningun input en ${limit.toMillis()} ms")
+
 // El JSON de reglas de lint es invalido (mal formado o con valores que no corresponden). 400.
 class InvalidLintConfigException(message: String, cause: Throwable? = null) : RuntimeException(message, cause)
 

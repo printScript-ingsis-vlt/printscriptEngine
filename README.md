@@ -26,7 +26,7 @@ Todos son `POST` con body JSON. Las versiones soportadas son `1.0` y `1.1`.
 | `/printscript/interpret` | `{ snippetKey, version, inputs? }` | `{ output: [], errors: [] }` |
 | `/printscript/lint` | `{ snippetKey, version, rulesKey? }` | `{ issues: [{ rule, severity, message, line, column }], errors: [] }` |
 | `/printscript/format` | `{ snippetKey, version, rulesKey? }` | `{ snippetKey, formattedKey, errors: [] }` |
-| `/printscript/validate` | `{ snippetKey, version }` | `{ valid, errors: [{ rule, message, line, column }] }` |
+| `/printscript/validate` | `{ snippetKey?, content?, version }` (uno solo de los dos) | `{ valid, errors: [{ rule, message, line, column }] }` |
 | `GET /actuator/health` | — | `{ "status": "UP" }` |
 
 Cómo leer las respuestas:
@@ -35,6 +35,10 @@ Cómo leer las respuestas:
   dentro de `errors` o `issues`.
   - `lint`: sin `issues` el snippet cumple; con `issues` no cumple; con `errors` no compila.
   - `validate`: `rule` es `lexical`, `syntax` o `semantic`.
+- **`validate`** valida el código de uno de dos lados, y tiene que venir exactamente uno (si no, `400`):
+  - `content`: el texto del código, sin que esté guardado. No toca el Asset Service, así que sirve para
+    validar antes de guardar. Máximo 1.000.000 de caracteres.
+  - `snippetKey`: un snippet que ya está en el Asset Service. Uno en blanco cuenta como ausente.
 - **`format`** guarda el resultado en `{snippetKey}.formatted` y nunca pisa la original. Si el snippet no compila
   no escribe nada y `formattedKey` viene en `null`.
 - **`interpret`**: corta a los 10 segundos y a las 10.000 líneas de salida. `readEnv` no tiene acceso a las
