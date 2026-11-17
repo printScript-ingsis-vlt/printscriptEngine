@@ -1,5 +1,7 @@
 package com.printscript.domain.interfaces
 
+import com.printscript.domain.interactive.ExecutionHandle
+import com.printscript.domain.interactive.ExecutionListener
 import com.printscript.domain.result.FormatResult
 import com.printscript.domain.result.InterpretResult
 import com.printscript.domain.result.LintResult
@@ -11,6 +13,12 @@ interface PrintScriptEngine {
 
     // ejecuto el codigo
     fun interpret(code: String, version: String, inputs: List<String>?): InterpretResult
+
+    /**
+     * Ejecuta en segundo plano: los outputs y los pedidos de input van llegando a [listener] y los inputs se
+     * mandan con el handle. Una version invalida lanza UnsupportedVersionException antes de arrancar.
+     */
+    fun interpretInteractive(code: String, version: String, listener: ExecutionListener): ExecutionHandle
 
     //linteo codigo coin las reglas en formatt jason
     fun lint(code: String, version: String, lintConfigJson: String?): LintResult
